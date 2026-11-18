@@ -1,9 +1,11 @@
 package analyzer
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -67,6 +69,41 @@ func TestHistoryFromRepositorySubdirectory(t *testing.T) {
 	last := r.Components[len(r.Components)-1]
 	if last.Name != "change-locality" || last.Detail != "analyzed 2 matching commits (up to 10)" {
 		t.Fatalf("unexpected history component: %#v", last)
+	}
+}
+
+func TestDiscoverGroupsDependentPackagesDeterministically(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "orders/order.go", "package orders\nimport \"example.test/app/payments\"\n")
+	write(t, root, "payments/payment.go", "package payments\n")
+	write(t, root, "unrelated/audit.go", "package unrelated\n")
+	cfg := DiscoverConfig{MinClusters: 2, MaxClusters: 2, HistoryCommits: 10, MinCochange: 2}
+	first, err := Discover(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Discover(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Candidates) != 1 || len(second.Candidates) != 1 {
+		t.Fatalf("candidates: %#v", first.Candidates)
+	}
+	if fmt.Sprint(first.Candidates) != fmt.Sprint(second.Candidates) {
+		t.Fatal("discovery is not deterministic")
+	}
+	found := false
+	for _, boundary := range first.Candidates[0].Boundaries {
+		if strings.Join(boundary.Units, ",") == "orders,payments" {
+			found = true
+			if boundary.Evidence.InternalDependencyEdges != 1 {
+				t.Fatalf("evidence: %#v", boundary.Evidence)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("dependent packages were not grouped: %#v", first.Candidates[0])
 	}
 }
 

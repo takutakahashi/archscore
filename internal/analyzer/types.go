@@ -74,3 +74,53 @@ type edge struct {
 	Import               string
 	Line                 int
 }
+
+type DiscoverConfig struct {
+	MinClusters     int      `json:"minClusters"`
+	MaxClusters     int      `json:"maxClusters"`
+	HistoryCommits  int      `json:"historyCommits"`
+	MinCochange     int      `json:"minCochange"`
+	MaxBoundarySize int      `json:"maxBoundarySize"`
+	Exclude         []string `json:"exclude"`
+}
+
+type DiscoveryReport struct {
+	Version         string              `json:"version"`
+	Units           int                 `json:"units"`
+	Files           int                 `json:"files"`
+	DependencyEdges int                 `json:"dependencyEdges"`
+	HistoryCommits  int                 `json:"historyCommits"`
+	Weights         DiscoveryWeights    `json:"weights"`
+	Candidates      []BoundaryCandidate `json:"candidates"`
+	Notes           []string            `json:"notes,omitempty"`
+}
+
+type DiscoveryWeights struct {
+	Static     float64 `json:"staticDependency"`
+	Change     float64 `json:"changeCoupling"`
+	Vocabulary float64 `json:"pathVocabulary"`
+}
+
+type BoundaryCandidate struct {
+	ClusterCount         int                 `json:"clusterCount"`
+	Quality              float64             `json:"quality"`
+	DependencyCoverage   float64             `json:"dependencyCoverage"`
+	MeanInternalAffinity float64             `json:"meanInternalAffinity"`
+	Balance              float64             `json:"balance"`
+	Boundaries           []SuggestedBoundary `json:"boundaries"`
+}
+
+type SuggestedBoundary struct {
+	SuggestedName string           `json:"suggestedName"`
+	Units         []string         `json:"units"`
+	Files         int              `json:"files"`
+	Evidence      BoundaryEvidence `json:"evidence"`
+}
+
+type BoundaryEvidence struct {
+	InternalDependencyEdges int     `json:"internalDependencyEdges"`
+	StaticAffinity          float64 `json:"staticAffinity"`
+	ChangeAffinity          float64 `json:"changeAffinity"`
+	VocabularyAffinity      float64 `json:"vocabularyAffinity"`
+	CombinedAffinity        float64 `json:"combinedAffinity"`
+}
