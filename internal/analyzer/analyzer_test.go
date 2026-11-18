@@ -70,8 +70,37 @@ func TestHistoryFromRepositorySubdirectory(t *testing.T) {
 		t.Fatalf("unexpected locality: %#v", r.Modules[0])
 	}
 	last := r.Components[len(r.Components)-1]
-	if last.Name != "change-locality" || last.Detail != "evaluated 2/2 modules; target 80% contained changes" {
+	if last.Name != "change-locality" || last.Detail != "evaluated 2/2 modules and 3 changes; 0 changes meet the 80% locality target" {
 		t.Fatalf("unexpected history component: %#v", last)
+	}
+}
+
+func TestChangeLocalityWeightsModulesByEvidence(t *testing.T) {
+	report := Report{Modules: []ModuleReport{
+		{Name: "well-supported"},
+		{Name: "barely-supported"},
+	}}
+	root := t.TempDir()
+	files := map[string]*sourceFile{
+		"good/a.go": {Path: "good/a.go", Module: "well-supported"},
+		"bad/b.go":  {Path: "bad/b.go", Module: "barely-supported"},
+	}
+	runGit(t, root, "init")
+	for i := 0; i < 10; i++ {
+		write(t, root, "good/a.go", fmt.Sprintf("package good\n// %d\n", i))
+		runGit(t, root, "add", ".")
+		runGit(t, root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", fmt.Sprintf("good %d", i))
+	}
+	for i := 0; i < 2; i++ {
+		write(t, root, "good/a.go", fmt.Sprintf("package good\n// shared %d\n", i))
+		write(t, root, "bad/b.go", fmt.Sprintf("package bad\n// shared %d\n", i))
+		runGit(t, root, "add", ".")
+		runGit(t, root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", fmt.Sprintf("shared %d", i))
+	}
+	applyHistory(root, files, Config{HistoryCommits: 20, MinModuleChanges: 1, MinCochange: 1, MinLocalityRatio: .8}, &report)
+	component := report.Components[0]
+	if component.Score != 4 {
+		t.Fatalf("well-supported history should dominate sparse evidence: %#v", component)
 	}
 }
 

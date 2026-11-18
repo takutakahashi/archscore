@@ -150,7 +150,8 @@ information.
 Public-contract scoring only considers modules declaring `publicPaths`.
 Cohesion excludes single-package or edge-free modules and weights the remaining
 modules by dependency edges. Change locality only scores modules with enough
-history.
+history and weights their result by the number of observed changes, so a module
+with five commits does not count as much as one with fifty.
 
 Use `"policyMode": "observational"` for exploratory configurations that allow
 dependencies broadly. Violations and cycles are still reported, but boundary
