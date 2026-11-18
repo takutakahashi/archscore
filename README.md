@@ -158,6 +158,11 @@ scales the confidence of every structural component, because dependencies in
 unassigned code cannot support conclusions about boundaries, cycles, coupling,
 cohesion, contracts, or change locality.
 
+`scoreLowerBound` treats every unevaluated point as failed;
+`scoreUpperBound` treats every unevaluated point as perfect. Together with the
+evidence-normalized `score`, these bounds make uncertainty explicit instead of
+compressing missing evidence into a single number.
+
 Boundary compliance is scored by the share of observed directed module pairs
 that violate policy. Repeating the same forbidden import in many files remains
 visible in the violation list but does not multiply the architectural breadth
