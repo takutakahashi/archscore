@@ -33,7 +33,8 @@ go run ./cmd/archscore discover \
   -min-clusters 8 \
   -max-clusters 30 \
   -history 200 \
-  -max-boundary-size 12
+  -max-boundary-size 12 \
+  -max-boundary-files 100
 ```
 
 The atomic unit is a Go package or TypeScript source directory. Deterministic
@@ -50,16 +51,67 @@ result. The output contains coarse, middle, and fine candidates with evidence
 for every suggested boundary. Candidates are starting points for architectural
 judgment, not automatically approved policies.
 
+Modules can declare architecture roles and local coupling thresholds. A
+`composition-root` is not penalized for fan-out because wiring dependencies is
+its responsibility:
+
+```json
+{
+  "name": "commands",
+  "paths": ["cmd/**"],
+  "role": "composition-root",
+  "maxFanOut": 0,
+  "mayDependOn": ["application", "infrastructure"]
+}
+```
+
+Change coupling is evaluated only after `minModuleChanges` (default 5), and a
+relationship needs `minCochange` shared commits (default 3). Insufficient
+history receives a neutral score with reduced report confidence rather than a
+penalty. Single-package Go modules also receive neutral cohesion because files
+inside a Go package do not import one another.
+
+Declare a module's public contract with `publicPaths`. Cross-module imports may
+target those paths, but imports of any other path in that module are reported
+as `private-dependency` violations. The analyzer counts exported Go and
+TypeScript declarations in the public paths and applies `maxPublicSymbols`:
+
+```json
+{
+  "name": "notifications",
+  "paths": ["internal/capabilities/notifications/**"],
+  "publicPaths": ["internal/capabilities/notifications/public/**"],
+  "maxPublicSymbols": 10,
+  "maxFanOut": 3,
+  "mayDependOn": ["platform-storage"]
+}
+```
+
+Use a saved report as a CI baseline. The comparison detects score loss, new
+violations or cycles, unassigned files, public API growth, and confidence loss:
+
+```sh
+archscore compare \
+  -baseline architecture-baseline.json \
+  -current current.json \
+  -fail-on-regression
+```
+
 ## Scoring (100 points)
 
 | Component | Points | Deterministic input |
 |---|---:|---|
-| Boundaries | 35 | forbidden resolved dependency edges |
-| Acyclicity | 25 | strongly connected module components |
+| Boundaries | 30 | forbidden and private dependency edges |
+| Acyclicity | 20 | strongly connected module components |
+| Public contract | 10 | exported symbols under declared public paths |
 | Coupling | 15 | module fan-out above `maxFanOut` |
 | Cohesion | 10 | internal / all resolved module edges |
 | Module coverage | 10 | source files assigned to a module |
-| Change locality | 5 | cross-module co-change in recent commits |
+| Change locality | 5 | commits whose analyzed changes are at least 80% contained |
+
+The top-level `confidence` is the point-weighted fraction of evidence that was
+actually evaluable. Each component also reports its own confidence. A neutral
+score with low confidence means “insufficient evidence,” not “known good.”
 
 Boundary violations and cycles fail the gate independently of the numeric
 score. Every violation includes its source file, line, import and module pair.
@@ -71,7 +123,9 @@ score. Every violation includes its source file, line, import and module pair.
   package workspace aliases are not yet resolved.
 - Generated code, tests, vendored dependencies and other files should be
   excluded explicitly when they should not affect the score.
-- Cohesion and change coupling are indicators, not universal design truths.
+- Export counting measures declarations, not the full type-level API surface
+  such as every exported struct field.
+- Cohesion and change locality are indicators, not universal design truths.
   The declared dependency policy is the authoritative architectural intent.
 - Boundary discovery uses directory-level TypeScript units and does not yet
   infer workspace aliases or semantic domain vocabulary.

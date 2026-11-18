@@ -1,11 +1,14 @@
 {
   "maxFanOut": 4,
   "historyCommits": 100,
+  "minModuleChanges": 5,
+  "minCochange": 3,
   "exclude": ["**/*_test.go"],
   "modules": [
     {
       "name": "cli",
       "paths": ["cmd/**"],
+      "role": "composition-root",
       "mayDependOn": ["analyzer"]
     },
     {

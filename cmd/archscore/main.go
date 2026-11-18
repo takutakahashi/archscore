@@ -14,7 +14,39 @@ func main() {
 		discover(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "compare" {
+		compare(os.Args[2:])
+		return
+	}
 	analyze(os.Args[1:])
+}
+
+func compare(args []string) {
+	flags := flag.NewFlagSet("archscore compare", flag.ExitOnError)
+	baselinePath := flags.String("baseline", "", "baseline report JSON")
+	currentPath := flags.String("current", "", "current report JSON")
+	failOnRegression := flags.Bool("fail-on-regression", false, "exit 2 when regressions are found")
+	pretty := flags.Bool("pretty", true, "pretty-print JSON")
+	_ = flags.Parse(args)
+	if *baselinePath == "" || *currentPath == "" {
+		fatal(fmt.Errorf("baseline and current are required"))
+	}
+	read := func(path string) analyzer.Report {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			fatal(err)
+		}
+		var report analyzer.Report
+		if err := json.Unmarshal(b, &report); err != nil {
+			fatal(err)
+		}
+		return report
+	}
+	result := analyzer.CompareReports(read(*baselinePath), read(*currentPath))
+	printJSON(result, *pretty)
+	if *failOnRegression && !result.Passed {
+		os.Exit(2)
+	}
 }
 
 func analyze(args []string) {
@@ -55,11 +87,12 @@ func discover(args []string) {
 	history := flags.Int("history", 200, "maximum commits to analyze")
 	minCochange := flags.Int("min-cochange", 3, "minimum shared commits for change affinity")
 	maxBoundarySize := flags.Int("max-boundary-size", 12, "maximum source units in a suggested boundary")
+	maxBoundaryFiles := flags.Int("max-boundary-files", 100, "maximum source files in a suggested boundary")
 	pretty := flags.Bool("pretty", true, "pretty-print JSON")
 	_ = flags.Parse(args)
 	report, err := analyzer.Discover(*root, analyzer.DiscoverConfig{
 		MinClusters: *minClusters, MaxClusters: *maxClusters, HistoryCommits: *history,
-		MinCochange: *minCochange, MaxBoundarySize: *maxBoundarySize,
+		MinCochange: *minCochange, MaxBoundarySize: *maxBoundarySize, MaxBoundaryFiles: *maxBoundaryFiles,
 		Exclude: []string{"**/*_test.go", "**/*.test.ts", "**/*.test.tsx"},
 	})
 	if err != nil {
