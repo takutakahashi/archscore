@@ -25,6 +25,9 @@ func Analyze(root string, cfg Config) (Report, error) {
 	if cfg.MaxFanOut <= 0 {
 		cfg.MaxFanOut = 5
 	}
+	if cfg.MaxCouplingLoad <= 0 {
+		cfg.MaxCouplingLoad = 5
+	}
 	if cfg.HistoryCommits <= 0 {
 		cfg.HistoryCommits = 100
 	}
@@ -382,27 +385,33 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	if activeModules > 0 {
 		cycles = int(math.Round(20 * float64(activeModules-len(cyclicModules)) / float64(activeModules)))
 	}
-	over, eligible := 0, 0
-	scaleThreshold := int(math.Ceil(math.Sqrt(float64(maxInt(1, len(r.Modules))))))
+	rawOver, loadOver, eligible := 0, 0, 0
 	for _, m := range r.Modules {
 		moduleCfg := findModuleConfig(cfg.Modules, m.Name)
 		if moduleCfg.Role == "composition-root" {
 			continue
 		}
 		eligible++
-		threshold := cfg.MaxFanOut
+		rawThreshold := cfg.MaxFanOut
 		if moduleCfg.MaxFanOut != nil {
-			threshold = *moduleCfg.MaxFanOut
-		} else {
-			threshold = maxInt(threshold, scaleThreshold)
+			rawThreshold = *moduleCfg.MaxFanOut
 		}
-		if threshold > 0 && m.FanOut > threshold {
-			over++
+		loadThreshold := cfg.MaxCouplingLoad
+		if moduleCfg.MaxCouplingLoad != nil {
+			loadThreshold = *moduleCfg.MaxCouplingLoad
+		}
+		if rawThreshold > 0 && m.FanOut > rawThreshold {
+			rawOver++
+		}
+		if loadThreshold > 0 && m.CouplingLoad > loadThreshold {
+			loadOver++
 		}
 	}
 	coupling := 15
 	if eligible > 0 {
-		coupling = int(math.Round(15 * (1 - float64(over)/float64(eligible))))
+		rawCompliance := 1 - float64(rawOver)/float64(eligible)
+		loadCompliance := 1 - float64(loadOver)/float64(eligible)
+		coupling = int(math.Round(15 * (rawCompliance + loadCompliance) / 2))
 	}
 	cohesionWeighted, cohesionWeight, totalCohesionWeight := 0.0, 0, 0
 	for _, m := range r.Modules {
@@ -454,7 +463,7 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		{"boundaries", boundary, 30, fmt.Sprintf("%d/%d observed dependency pairs violate policy across %d import edges; policy mode %s", len(violatingPairs), len(dependencyPairs), len(r.Violations), effectivePolicyMode(cfg.PolicyMode)), boundaryConfidence, 0},
 		{"acyclicity", cycles, 20, fmt.Sprintf("%d/%d active modules participate in %d strongly connected components", len(cyclicModules), activeModules, len(r.Cycles)), 1, 0},
 		{"public-contract", publicScore, 10, fmt.Sprintf("%d/%d modules declare public paths", publicConfigured, len(r.Modules)), round(publicConfidence), 0},
-		{"coupling", coupling, 15, fmt.Sprintf("effective default fan-out threshold %d; %d/%d modules exceed it; composition roots exempt", maxInt(cfg.MaxFanOut, scaleThreshold), over, eligible), 1, 0},
+		{"coupling", coupling, 15, fmt.Sprintf("%d/%d modules exceed fan-out %d; %d/%d exceed stability-weighted load %.1f; composition roots exempt", rawOver, eligible, cfg.MaxFanOut, loadOver, eligible, cfg.MaxCouplingLoad), 1, 0},
 		{"cohesion", cohesion, 10, fmt.Sprintf("%d/%d dependency-edge weight is evaluable; single-package modules excluded", cohesionWeight, totalCohesionWeight), round(cohesionConfidence), 0},
 		{"module-coverage", coverage, 10, fmt.Sprintf("%d unassigned files", len(r.Unknown)), 1, 0},
 	}
@@ -559,6 +568,15 @@ func moduleReports(files map[string]*sourceFile, edges []edge, cfg Config) []Mod
 			r.Cohesion = round(float64(r.InternalEdges) / float64(total))
 		}
 		result = append(result, *r)
+	}
+	for i := range result {
+		load := 0.0
+		for target := range out[result[i].Name] {
+			if reports[target] != nil {
+				load += reports[target].Instability
+			}
+		}
+		result[i].CouplingLoad = round(load)
 	}
 	return result
 }

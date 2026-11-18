@@ -3,6 +3,7 @@ package analyzer
 type Config struct {
 	Modules          []ModuleConfig `json:"modules"`
 	MaxFanOut        int            `json:"maxFanOut"`
+	MaxCouplingLoad  float64        `json:"maxCouplingLoad"`
 	HistoryCommits   int            `json:"historyCommits"`
 	MinModuleChanges int            `json:"minModuleChanges"`
 	MinCochange      int            `json:"minCochange"`
@@ -18,6 +19,7 @@ type ModuleConfig struct {
 	MayDependOn      []string `json:"mayDependOn"`
 	Role             string   `json:"role,omitempty"`
 	MaxFanOut        *int     `json:"maxFanOut,omitempty"`
+	MaxCouplingLoad  *float64 `json:"maxCouplingLoad,omitempty"`
 	PublicPaths      []string `json:"publicPaths,omitempty"`
 	MaxPublicSymbols *int     `json:"maxPublicSymbols,omitempty"`
 }
@@ -80,6 +82,7 @@ type ModuleReport struct {
 	Units                    int      `json:"units"`
 	FanIn                    int      `json:"fanIn"`
 	FanOut                   int      `json:"fanOut"`
+	CouplingLoad             float64  `json:"couplingLoad"`
 	Instability              float64  `json:"instability"`
 	InternalEdges            int      `json:"internalEdges"`
 	ExternalEdges            int      `json:"externalEdges"`

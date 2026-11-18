@@ -1,5 +1,6 @@
 {
   "maxFanOut": 4,
+  "maxCouplingLoad": 3,
   "historyCommits": 100,
   "minModuleChanges": 5,
   "minCochange": 3,

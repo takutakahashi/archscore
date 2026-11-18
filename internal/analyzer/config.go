@@ -21,6 +21,9 @@ func LoadConfig(path string) (Config, error) {
 	if cfg.MaxFanOut <= 0 {
 		cfg.MaxFanOut = 5
 	}
+	if cfg.MaxCouplingLoad <= 0 {
+		cfg.MaxCouplingLoad = 5
+	}
 	if cfg.HistoryCommits <= 0 {
 		cfg.HistoryCommits = 100
 	}
