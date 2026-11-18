@@ -241,6 +241,22 @@ func TestObservedScoreWeightsPartialEvidence(t *testing.T) {
 	}
 }
 
+func TestAcyclicityScoresAffectedModuleRatio(t *testing.T) {
+	modules := []ModuleConfig{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "d"}}
+	files := map[string]*sourceFile{}
+	for _, module := range modules {
+		files[module.Name+"/x.go"] = &sourceFile{Path: module.Name + "/x.go", Module: module.Name}
+	}
+	edges := []edge{
+		{FromModule: "a", ToModule: "b"},
+		{FromModule: "b", ToModule: "a"},
+	}
+	report := buildReport(files, edges, Config{Modules: modules})
+	if report.Components[1].Score != 10 || report.Components[1].Detail != "2/4 active modules participate in 1 strongly connected components" {
+		t.Fatalf("acyclicity did not reflect affected modules: %#v", report.Components[1])
+	}
+}
+
 func TestObservationalPolicyExcludesBoundaryPoints(t *testing.T) {
 	files := map[string]*sourceFile{"a/a.go": {Path: "a/a.go", Module: "a"}}
 	report := buildReport(files, nil, Config{PolicyMode: "observational", Modules: []ModuleConfig{{Name: "a"}}})

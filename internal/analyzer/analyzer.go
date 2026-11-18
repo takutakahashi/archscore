@@ -353,7 +353,21 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	}
 	sort.Strings(r.Unknown)
 	boundary := maxInt(0, 30-len(r.Violations)*6)
-	cycles := maxInt(0, 20-len(r.Cycles)*8)
+	activeModules, cyclicModules := 0, map[string]bool{}
+	for _, module := range r.Modules {
+		if module.Files > 0 {
+			activeModules++
+		}
+	}
+	for _, cycle := range r.Cycles {
+		for _, module := range cycle {
+			cyclicModules[module] = true
+		}
+	}
+	cycles := 20
+	if activeModules > 0 {
+		cycles = int(math.Round(20 * float64(activeModules-len(cyclicModules)) / float64(activeModules)))
+	}
 	over, eligible := 0, 0
 	scaleThreshold := int(math.Ceil(math.Sqrt(float64(maxInt(1, len(r.Modules))))))
 	for _, m := range r.Modules {
@@ -424,7 +438,7 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	}
 	r.Components = []ComponentScore{
 		{"boundaries", boundary, 30, fmt.Sprintf("%d forbidden or private dependency edges; policy mode %s", len(r.Violations), effectivePolicyMode(cfg.PolicyMode)), boundaryConfidence, 0},
-		{"acyclicity", cycles, 20, fmt.Sprintf("%d module cycles", len(r.Cycles)), 1, 0},
+		{"acyclicity", cycles, 20, fmt.Sprintf("%d/%d active modules participate in %d strongly connected components", len(cyclicModules), activeModules, len(r.Cycles)), 1, 0},
 		{"public-contract", publicScore, 10, fmt.Sprintf("%d/%d modules declare public paths", publicConfigured, len(r.Modules)), round(publicConfidence), 0},
 		{"coupling", coupling, 15, fmt.Sprintf("effective default fan-out threshold %d; %d/%d modules exceed it; composition roots exempt", maxInt(cfg.MaxFanOut, scaleThreshold), over, eligible), 1, 0},
 		{"cohesion", cohesion, 10, fmt.Sprintf("%d/%d dependency-edge weight is evaluable; single-package modules excluded", cohesionWeight, totalCohesionWeight), round(cohesionConfidence), 0},
