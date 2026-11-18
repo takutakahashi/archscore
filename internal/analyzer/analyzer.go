@@ -714,7 +714,7 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		report.Notes = append(report.Notes, "no analyzed source files were found in git history; change-coupling score omitted")
 		return
 	}
-	totalPenalty, evaluated := 0, 0
+	evaluated, evaluatedChanges, localChanges := 0, 0, 0
 	for i := range report.Modules {
 		m := &report.Modules[i]
 		m.ChangeCommits = counts[m.Name]
@@ -727,6 +727,7 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		}
 		m.ChangeEvaluated = true
 		evaluated++
+		evaluatedChanges += m.ChangeCommits
 		best := 0.0
 		for p, n := range pairs[m.Name] {
 			if n < cfg.MinCochange {
@@ -742,16 +743,16 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		}
 		sort.Strings(m.ChangePartners)
 		m.ChangeCoupling = round(best)
-		if m.ChangeLocality < cfg.MinLocalityRatio {
-			totalPenalty++
+		if m.ChangeLocality >= cfg.MinLocalityRatio {
+			localChanges += m.ChangeCommits
 		}
 	}
 	score := 5
-	if evaluated > 0 {
-		score = int(math.Round(5 * float64(evaluated-totalPenalty) / float64(evaluated)))
+	if evaluatedChanges > 0 {
+		score = int(math.Round(5 * float64(localChanges) / float64(evaluatedChanges)))
 	}
 	confidence := float64(evaluated) / float64(maxInt(1, len(report.Modules)))
-	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("evaluated %d/%d modules; target %.0f%% contained changes", evaluated, len(report.Modules), cfg.MinLocalityRatio*100), round(confidence), 0})
+	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("evaluated %d/%d modules and %d changes; %d changes meet the %.0f%% locality target", evaluated, len(report.Modules), evaluatedChanges, localChanges, cfg.MinLocalityRatio*100), round(confidence), 0})
 }
 
 func finalizeScores(report *Report) {
