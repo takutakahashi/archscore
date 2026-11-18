@@ -59,6 +59,13 @@ func Discover(root string, cfg DiscoverConfig) (DiscoveryReport, error) {
 	if len(units) == 0 {
 		return DiscoveryReport{}, fmt.Errorf("no Go or TypeScript source units found")
 	}
+	autoScaleNote := ""
+	minimumCapacity := int(math.Ceil(float64(len(units)) / float64(cfg.MaxBoundarySize)))
+	if minimumCapacity > cfg.MaxClusters && !cfg.DisableAutoScale {
+		old := cfg.MaxClusters
+		cfg.MaxClusters = minimumCapacity
+		autoScaleNote = fmt.Sprintf("raised max clusters from %d to %d so %d units fit the %d-unit boundary limit", old, cfg.MaxClusters, len(units), cfg.MaxBoundarySize)
+	}
 
 	static, edgeCounts, totalEdges := staticAffinities(edges, fileUnit)
 	change, historyCount, historyNote := changeAffinities(abs, fileUnit, cfg)
@@ -72,6 +79,9 @@ func Discover(root string, cfg DiscoverConfig) (DiscoveryReport, error) {
 	}
 	if historyNote != "" {
 		report.Notes = append(report.Notes, historyNote)
+	}
+	if autoScaleNote != "" {
+		report.Notes = append(report.Notes, autoScaleNote)
 	}
 	if len(candidates) > 0 && candidates[len(candidates)-1].ClusterCount > cfg.MinClusters {
 		report.Notes = append(report.Notes, fmt.Sprintf("stopped at %d clusters because no positive-affinity merge fit limits of %d units and %d files", candidates[len(candidates)-1].ClusterCount, cfg.MaxBoundarySize, cfg.MaxBoundaryFiles))
@@ -241,6 +251,9 @@ func clusterCandidates(units map[string]discoveryUnit, affinities map[string]aff
 			snapshots[len(clusters)] = copyClusters(clusters)
 		}
 	}
+	if _, ok := snapshots[len(clusters)]; !ok {
+		snapshots[len(clusters)] = copyClusters(clusters)
+	}
 	var counts []int
 	for n := range snapshots {
 		counts = append(counts, n)
@@ -257,7 +270,7 @@ func makeCandidate(clusters []cluster, units map[string]discoveryUnit, affinitie
 	c := BoundaryCandidate{ClusterCount: len(clusters)}
 	internalEdges, affinitySum, affinityPairs := 0, 0.0, 0
 	for _, cl := range clusters {
-		b := SuggestedBoundary{SuggestedName: suggestedName(cl.units), Units: append([]string{}, cl.units...)}
+		b := SuggestedBoundary{SuggestedName: suggestedName(cl.units), Units: append([]string{}, cl.units...), Paths: unitPatterns(cl.units)}
 		var sums affinity
 		pairs := 0
 		for _, u := range cl.units {
@@ -305,6 +318,21 @@ func makeCandidate(clusters []cluster, units map[string]discoveryUnit, affinitie
 	c.Quality = round(0.5*c.DependencyCoverage + 0.3*c.MeanInternalAffinity + 0.2*c.Balance)
 	sort.Slice(c.Boundaries, func(i, j int) bool { return c.Boundaries[i].SuggestedName < c.Boundaries[j].SuggestedName })
 	return c
+}
+
+func unitPatterns(units []string) []string {
+	extensions := []string{"*.go", "*.ts", "*.tsx", "*.mts", "*.cts"}
+	patterns := make([]string, 0, len(units)*len(extensions))
+	for _, unit := range units {
+		prefix := unit + "/"
+		if unit == "root" {
+			prefix = ""
+		}
+		for _, extension := range extensions {
+			patterns = append(patterns, prefix+extension)
+		}
+	}
+	return patterns
 }
 
 func clusterAffinity(a, b cluster, affinities map[string]affinity) float64 {

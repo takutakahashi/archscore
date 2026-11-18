@@ -51,6 +51,11 @@ result. The output contains coarse, middle, and fine candidates with evidence
 for every suggested boundary. Candidates are starting points for architectural
 judgment, not automatically approved policies.
 
+Each suggested boundary includes ready-to-use `paths` patterns scoped to files
+directly inside its package directories. This avoids turning a parent package
+such as `internal` into `internal/**` and accidentally absorbing every child
+package.
+
 Modules can declare architecture roles and local coupling thresholds. A
 `composition-root` is not penalized for fan-out because wiring dependencies is
 its responsibility:
@@ -70,6 +75,19 @@ relationship needs `minCochange` shared commits (default 3). Insufficient
 history receives a neutral score with reduced report confidence rather than a
 penalty. Single-package Go modules also receive neutral cohesion because files
 inside a Go package do not import one another.
+
+Test sources (`*_test.go`, `*.test.ts(x)`, and `*.spec.ts(x)`) are excluded from
+production scoring by default. Set `includeTests` to `true` to audit the
+combined production-and-test dependency graph.
+
+Discovery raises its maximum cluster count when necessary to fit all source
+units within `max-boundary-size`; disable this with `-auto-scale=false`. The
+default fan-out threshold grows with the square root of the module count, and
+coupling is scored by the proportion of modules above that threshold. A
+module-level `maxFanOut` remains an explicit, non-scaled override.
+
+A `composition-root` with inbound module dependencies receives a warning. This
+usually means reusable code and application wiring share a declared boundary.
 
 Declare a module's public contract with `publicPaths`. Cross-module imports may
 target those paths, but imports of any other path in that module are reported
@@ -121,8 +139,11 @@ score. Every violation includes its source file, line, import and module pair.
 - Go internal imports are resolved from the root `go.mod` module path.
 - TypeScript relative imports are resolved. `tsconfig.json` path aliases and
   package workspace aliases are not yet resolved.
-- Generated code, tests, vendored dependencies and other files should be
-  excluded explicitly when they should not affect the score.
+- Tests are excluded by default. Generated code and other repository-specific
+  sources should be excluded explicitly when they should not affect the score.
+- If the Go parser encounters newer syntax, a conservative import/export
+  scanner keeps analysis operational; rebuilding with the target Go version
+  remains the most precise option.
 - Export counting measures declarations, not the full type-level API surface
   such as every exported struct field.
 - Cohesion and change locality are indicators, not universal design truths.

@@ -4,6 +4,7 @@
   "minModuleChanges": 5,
   "minCochange": 3,
   "minLocalityRatio": 0.8,
+  "includeTests": false,
   "exclude": ["**/*.test.ts", "**/*_test.go", "**/generated/**"],
   "modules": [
     {

@@ -100,6 +100,9 @@ func TestDiscoverGroupsDependentPackagesDeterministically(t *testing.T) {
 	for _, boundary := range first.Candidates[0].Boundaries {
 		if strings.Join(boundary.Units, ",") == "orders,payments" {
 			found = true
+			if strings.Contains(strings.Join(boundary.Paths, ","), "orders/**") || !contains(boundary.Paths, "orders/*.go") {
+				t.Fatalf("unsafe generated paths: %#v", boundary.Paths)
+			}
 			if boundary.Evidence.InternalDependencyEdges != 1 {
 				t.Fatalf("evidence: %#v", boundary.Evidence)
 			}
@@ -108,6 +111,15 @@ func TestDiscoverGroupsDependentPackagesDeterministically(t *testing.T) {
 	if !found {
 		t.Fatalf("dependent packages were not grouped: %#v", first.Candidates[0])
 	}
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCompositionRootIsExemptFromFanOutPenalty(t *testing.T) {
@@ -128,6 +140,80 @@ func TestCompositionRootIsExemptFromFanOutPenalty(t *testing.T) {
 	report = buildReport(files, edges, Config{Modules: modules, MaxFanOut: 2})
 	if report.Components[3].Score >= 15 {
 		t.Fatalf("ordinary module was not penalized: %#v", report.Components[3])
+	}
+}
+
+func TestCompositionRootWithInboundDependenciesWarns(t *testing.T) {
+	modules := []ModuleConfig{{Name: "root", Role: "composition-root"}, {Name: "feature"}}
+	files := map[string]*sourceFile{
+		"root/main.go":       {Path: "root/main.go", Module: "root"},
+		"feature/feature.go": {Path: "feature/feature.go", Module: "feature"},
+	}
+	edges := []edge{{FromFile: "feature/feature.go", ToFile: "root/main.go", FromModule: "feature", ToModule: "root"}}
+	report := buildReport(files, edges, Config{Modules: modules})
+	if len(report.Modules[0].Warnings) != 1 {
+		t.Fatalf("expected role-mixing warning: %#v", report.Modules[0])
+	}
+}
+
+func TestTestsAreExcludedUnlessRequested(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "a/a.go", "package a\n")
+	write(t, root, "a/a_test.go", "package a\nimport _ \"example.test/app/b\"\n")
+	write(t, root, "b/b.go", "package b\n")
+	cfg := Config{Modules: []ModuleConfig{{Name: "a", Paths: []string{"a/**"}}, {Name: "b", Paths: []string{"b/**"}}}}
+	report, err := Analyze(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Files != 2 || report.Edges != 0 {
+		t.Fatalf("tests affected production score: %#v", report)
+	}
+	cfg.IncludeTests = true
+	report, err = Analyze(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Files != 3 || report.Edges != 1 {
+		t.Fatalf("tests were not included on request: %#v", report)
+	}
+}
+
+func TestGoParserFallbackHandlesUnknownSyntax(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "future.go")
+	write(t, root, "future.go", "package future\nimport (\n \"context\"\n alias \"example.test/api\"\n)\nfunc (x X) Future[T any]() {}\ntype Exported struct{}\n")
+	imports, err := fallbackGoImports(path)
+	if err != nil || len(imports) != 2 || imports[1].Path != "example.test/api" {
+		t.Fatalf("fallback imports: %#v, %v", imports, err)
+	}
+	exports, err := countExports(path, ".go")
+	if err != nil || exports != 2 {
+		t.Fatalf("fallback exports=%d err=%v", exports, err)
+	}
+}
+
+func TestDiscoverAutoScalesClusterCapacity(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	for i := 0; i < 5; i++ {
+		body := "package p\n"
+		if i < 4 {
+			body += fmt.Sprintf("import _ \"example.test/app/p%d\"\n", i+1)
+		}
+		write(t, root, fmt.Sprintf("p%d/p.go", i), body)
+	}
+	report, err := Discover(root, DiscoverConfig{MinClusters: 1, MaxClusters: 2, MaxBoundarySize: 2, MaxBoundaryFiles: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, candidate := range report.Candidates {
+		found = found || candidate.ClusterCount == 3
+	}
+	if !found || !strings.Contains(strings.Join(report.Notes, " "), "raised max clusters") {
+		t.Fatalf("discovery was not auto-scaled: %#v", report)
 	}
 }
 
@@ -160,6 +246,20 @@ func TestDiscoverRespectsBoundaryFileLimit(t *testing.T) {
 	}
 	if len(report.Notes) == 0 {
 		t.Fatal("expected an explanation for stopping before min-clusters")
+	}
+}
+
+func TestDiscoverReturnsStoppedCandidate(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "a/a.go", "package a\n")
+	write(t, root, "b/b.go", "package b\n")
+	report, err := Discover(root, DiscoverConfig{MinClusters: 1, MaxClusters: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Candidates) != 1 || report.Candidates[0].ClusterCount != 2 {
+		t.Fatalf("stopped candidate missing: %#v", report.Candidates)
 	}
 }
 

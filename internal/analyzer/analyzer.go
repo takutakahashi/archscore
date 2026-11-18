@@ -19,6 +19,8 @@ import (
 var (
 	tsImport = regexp.MustCompile(`(?m)(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?["']([^"']+)["']|require\s*\(\s*["']([^"']+)["']\s*\)|import\s*\(\s*["']([^"']+)["']\s*\)`)
 	goModule = regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
+	goImport = regexp.MustCompile(`(?m)^\s*(?:[\w.]+\s+)?"([^"]+)"`)
+	goExport = regexp.MustCompile(`(?m)^\s*(?:func\s+(?:\([^\n]*\)\s*)?|type\s+|(?:var|const)\s+(?:\(\s*)?)([A-Z][A-Za-z0-9_]*)`)
 )
 
 func Analyze(root string, cfg Config) (Report, error) {
@@ -80,6 +82,9 @@ func collect(root string, cfg Config) (map[string]*sourceFile, string, error) {
 		if excluded(rel, cfg.Exclude) {
 			return nil
 		}
+		if !cfg.IncludeTests && isTestSource(rel) {
+			return nil
+		}
 		ext := filepath.Ext(rel)
 		if ext != ".go" && ext != ".ts" && ext != ".tsx" && ext != ".mts" && ext != ".cts" {
 			return nil
@@ -106,7 +111,11 @@ func countExports(path, ext string) (int, error) {
 	if ext == ".go" {
 		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if err != nil {
-			return 0, err
+			b, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return 0, readErr
+			}
+			return len(goExport.FindAllSubmatch(b, -1)), nil
 		}
 		count := 0
 		for _, decl := range f.Decls {
@@ -155,7 +164,7 @@ func parseImports(path, ext string) ([]sourceImport, error) {
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if err != nil {
-			return nil, err
+			return fallbackGoImports(path)
 		}
 		out := make([]sourceImport, 0, len(f.Imports))
 		for _, imp := range f.Imports {
@@ -185,6 +194,39 @@ func parseImports(path, ext string) ([]sourceImport, error) {
 		}
 	}
 	return out, nil
+}
+
+func fallbackGoImports(path string) ([]sourceImport, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	text := string(b)
+	start := strings.Index(text, "import")
+	if start < 0 {
+		return nil, nil
+	}
+	section := text[start:]
+	if open := strings.Index(section, "("); open >= 0 {
+		if close := strings.Index(section[open+1:], ")"); close >= 0 {
+			section = section[open+1 : open+1+close]
+		}
+	} else if newline := strings.IndexByte(section, '\n'); newline >= 0 {
+		section = section[:newline]
+	}
+	var out []sourceImport
+	for _, match := range goImport.FindAllStringSubmatchIndex(section, -1) {
+		value := section[match[2]:match[3]]
+		pos := start + match[2]
+		out = append(out, sourceImport{Path: value, Line: 1 + strings.Count(text[:pos], "\n")})
+	}
+	return out, nil
+}
+
+func isTestSource(path string) bool {
+	base := filepath.Base(path)
+	return strings.HasSuffix(base, "_test.go") || strings.HasSuffix(base, ".test.ts") || strings.HasSuffix(base, ".test.tsx") ||
+		strings.HasSuffix(base, ".spec.ts") || strings.HasSuffix(base, ".spec.tsx")
 }
 
 func stripComments(s string) string {
@@ -349,21 +391,28 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	sort.Strings(r.Unknown)
 	boundary := maxInt(0, 30-len(r.Violations)*6)
 	cycles := maxInt(0, 20-len(r.Cycles)*8)
-	over := 0
+	over, eligible := 0, 0
+	scaleThreshold := int(math.Ceil(math.Sqrt(float64(maxInt(1, len(r.Modules))))))
 	for _, m := range r.Modules {
 		moduleCfg := findModuleConfig(cfg.Modules, m.Name)
 		if moduleCfg.Role == "composition-root" {
 			continue
 		}
+		eligible++
 		threshold := cfg.MaxFanOut
 		if moduleCfg.MaxFanOut != nil {
 			threshold = *moduleCfg.MaxFanOut
+		} else {
+			threshold = maxInt(threshold, scaleThreshold)
 		}
 		if threshold > 0 && m.FanOut > threshold {
-			over += m.FanOut - threshold
+			over++
 		}
 	}
-	coupling := maxInt(0, 15-over*3)
+	coupling := 15
+	if eligible > 0 {
+		coupling = int(math.Round(15 * (1 - float64(over)/float64(eligible))))
+	}
 	cohesionAvg := 1.0
 	if len(r.Modules) > 0 {
 		cohesionAvg = 0
@@ -398,7 +447,7 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		{"boundaries", boundary, 30, fmt.Sprintf("%d forbidden or private dependency edges", len(r.Violations)), 1},
 		{"acyclicity", cycles, 20, fmt.Sprintf("%d module cycles", len(r.Cycles)), 1},
 		{"public-contract", publicScore, 10, fmt.Sprintf("%d/%d modules declare public paths", publicConfigured, len(r.Modules)), round(publicConfidence)},
-		{"coupling", coupling, 15, fmt.Sprintf("default fan-out threshold %d; composition roots exempt", cfg.MaxFanOut), 1},
+		{"coupling", coupling, 15, fmt.Sprintf("effective default fan-out threshold %d; %d/%d modules exceed it; composition roots exempt", maxInt(cfg.MaxFanOut, scaleThreshold), over, eligible), 1},
 		{"cohesion", cohesion, 10, "cross-package internal edge ratio; single-package modules are neutral", 1},
 		{"module-coverage", coverage, 10, fmt.Sprintf("%d unassigned files", len(r.Unknown)), 1},
 	}
@@ -485,6 +534,9 @@ func moduleReports(files map[string]*sourceFile, edges []edge, cfg Config) []Mod
 		}
 		r.PublicUnits = len(publicUnits)
 		r.FanIn, r.FanOut = len(in[c.Name]), len(out[c.Name])
+		if c.Role == "composition-root" && r.FanIn > 0 {
+			r.Warnings = append(r.Warnings, fmt.Sprintf("composition root has %d inbound module dependencies; split reusable code from wiring", r.FanIn))
+		}
 		if r.FanIn+r.FanOut > 0 {
 			r.Instability = round(float64(r.FanOut) / float64(r.FanIn+r.FanOut))
 		}

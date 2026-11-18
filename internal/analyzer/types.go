@@ -8,6 +8,7 @@ type Config struct {
 	MinCochange      int            `json:"minCochange"`
 	MinLocalityRatio float64        `json:"minLocalityRatio"`
 	Exclude          []string       `json:"exclude"`
+	IncludeTests     bool           `json:"includeTests,omitempty"`
 }
 
 type ModuleConfig struct {
@@ -74,6 +75,7 @@ type ModuleReport struct {
 	PublicSymbols            int      `json:"publicSymbols"`
 	PublicInboundEdges       int      `json:"publicInboundEdges"`
 	PrivateInboundViolations int      `json:"privateInboundViolations"`
+	Warnings                 []string `json:"warnings,omitempty"`
 }
 
 type sourceFile struct {
@@ -103,6 +105,7 @@ type DiscoverConfig struct {
 	MaxBoundarySize  int      `json:"maxBoundarySize"`
 	MaxBoundaryFiles int      `json:"maxBoundaryFiles"`
 	Exclude          []string `json:"exclude"`
+	DisableAutoScale bool     `json:"disableAutoScale"`
 }
 
 type DiscoveryReport struct {
@@ -134,6 +137,7 @@ type BoundaryCandidate struct {
 type SuggestedBoundary struct {
 	SuggestedName string           `json:"suggestedName"`
 	Units         []string         `json:"units"`
+	Paths         []string         `json:"paths"`
 	Files         int              `json:"files"`
 	Evidence      BoundaryEvidence `json:"evidence"`
 }
