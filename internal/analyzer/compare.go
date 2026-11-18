@@ -13,6 +13,9 @@ func CompareReports(baseline, current Report) ComparisonReport {
 		BaselineConfidence: baseline.Confidence, CurrentConfidence: current.Confidence,
 		Passed: true,
 	}
+	if baseline.Version != "" && current.Version != "" && baseline.Version != current.Version {
+		result.Regressions = append(result.Regressions, Regression{"report-version", fmt.Sprintf("baseline version %s cannot be compared with current version %s; regenerate the baseline", baseline.Version, current.Version)})
+	}
 	if current.Score < baseline.Score {
 		result.Regressions = append(result.Regressions, Regression{"score", fmt.Sprintf("score decreased by %d", baseline.Score-current.Score)})
 	}

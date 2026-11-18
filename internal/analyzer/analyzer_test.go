@@ -100,6 +100,9 @@ func TestDiscoverGroupsDependentPackagesDeterministically(t *testing.T) {
 	for _, boundary := range first.Candidates[0].Boundaries {
 		if strings.Join(boundary.Units, ",") == "orders,payments" {
 			found = true
+			if strings.Contains(strings.Join(boundary.Paths, ","), "orders/**") || !contains(boundary.Paths, "orders/*.go") {
+				t.Fatalf("unsafe generated paths: %#v", boundary.Paths)
+			}
 			if boundary.Evidence.InternalDependencyEdges != 1 {
 				t.Fatalf("evidence: %#v", boundary.Evidence)
 			}
@@ -108,6 +111,15 @@ func TestDiscoverGroupsDependentPackagesDeterministically(t *testing.T) {
 	if !found {
 		t.Fatalf("dependent packages were not grouped: %#v", first.Candidates[0])
 	}
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCompositionRootIsExemptFromFanOutPenalty(t *testing.T) {
@@ -131,6 +143,66 @@ func TestCompositionRootIsExemptFromFanOutPenalty(t *testing.T) {
 	}
 }
 
+func TestCompositionRootWithInboundDependenciesWarns(t *testing.T) {
+	modules := []ModuleConfig{{Name: "root", Role: "composition-root"}, {Name: "feature"}}
+	files := map[string]*sourceFile{
+		"root/main.go":       {Path: "root/main.go", Module: "root"},
+		"feature/feature.go": {Path: "feature/feature.go", Module: "feature"},
+	}
+	edges := []edge{{FromFile: "feature/feature.go", ToFile: "root/main.go", FromModule: "feature", ToModule: "root"}}
+	report := buildReport(files, edges, Config{Modules: modules})
+	if len(report.Modules[0].Warnings) != 1 {
+		t.Fatalf("expected role-mixing warning: %#v", report.Modules[0])
+	}
+}
+
+func TestTestsAreExcludedUnlessRequested(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "a/a.go", "package a\n")
+	write(t, root, "a/a_test.go", "package a\nimport _ \"example.test/app/b\"\n")
+	write(t, root, "b/b.go", "package b\n")
+	cfg := Config{Modules: []ModuleConfig{{Name: "a", Paths: []string{"a/**"}}, {Name: "b", Paths: []string{"b/**"}}}}
+	report, err := Analyze(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Files != 2 || report.Edges != 0 {
+		t.Fatalf("tests affected production score: %#v", report)
+	}
+	cfg.IncludeTests = true
+	report, err = Analyze(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Files != 3 || report.Edges != 1 {
+		t.Fatalf("tests were not included on request: %#v", report)
+	}
+}
+
+func TestDiscoverAutoScalesClusterCapacity(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	for i := 0; i < 5; i++ {
+		body := "package p\n"
+		if i < 4 {
+			body += fmt.Sprintf("import _ \"example.test/app/p%d\"\n", i+1)
+		}
+		write(t, root, fmt.Sprintf("p%d/p.go", i), body)
+	}
+	report, err := Discover(root, DiscoverConfig{MinClusters: 1, MaxClusters: 2, MaxBoundarySize: 2, MaxBoundaryFiles: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, candidate := range report.Candidates {
+		found = found || candidate.ClusterCount == 3
+	}
+	if !found || !strings.Contains(strings.Join(report.Notes, " "), "raised max clusters") {
+		t.Fatalf("discovery was not auto-scaled: %#v", report)
+	}
+}
+
 func TestSinglePackageModuleHasNeutralCohesion(t *testing.T) {
 	files := map[string]*sourceFile{
 		"a/one.go": {Path: "a/one.go", Module: "a"},
@@ -141,6 +213,40 @@ func TestSinglePackageModuleHasNeutralCohesion(t *testing.T) {
 	reports := moduleReports(files, edges, Config{Modules: []ModuleConfig{{Name: "a"}, {Name: "b"}}})
 	if reports[0].Units != 1 || reports[0].Cohesion != 1 {
 		t.Fatalf("single Go package should be neutral: %#v", reports[0])
+	}
+	if reports[0].CohesionEvaluated {
+		t.Fatalf("single Go package must not count as cohesion evidence: %#v", reports[0])
+	}
+}
+
+func TestObservedScoreExcludesUnevaluatedPoints(t *testing.T) {
+	report := Report{Components: []ComponentScore{
+		{Name: "known-good", Score: 30, Max: 30, Confidence: 1},
+		{Name: "unknown", Score: 70, Max: 70, Confidence: 0},
+	}}
+	finalizeScores(&report)
+	if report.Score != 100 || report.NominalScore != 100 || report.EvaluatedPoints != 30 || report.Confidence != .3 {
+		t.Fatalf("unexpected evidence-normalized score: %#v", report)
+	}
+}
+
+func TestObservedScoreWeightsPartialEvidence(t *testing.T) {
+	report := Report{Components: []ComponentScore{
+		{Name: "good", Score: 10, Max: 10, Confidence: 1},
+		{Name: "partial-bad", Score: 0, Max: 10, Confidence: .5},
+	}}
+	finalizeScores(&report)
+	if report.Score != 67 || report.EvaluatedPoints != 15 || report.Confidence != .15 {
+		t.Fatalf("unexpected partial-evidence score: %#v", report)
+	}
+}
+
+func TestObservationalPolicyExcludesBoundaryPoints(t *testing.T) {
+	files := map[string]*sourceFile{"a/a.go": {Path: "a/a.go", Module: "a"}}
+	report := buildReport(files, nil, Config{PolicyMode: "observational", Modules: []ModuleConfig{{Name: "a"}}})
+	finalizeScores(&report)
+	if report.Components[0].Confidence != 0 || report.Components[0].EvaluatedPoints != 0 {
+		t.Fatalf("observational policy counted as enforcement evidence: %#v", report.Components[0])
 	}
 }
 
@@ -160,6 +266,20 @@ func TestDiscoverRespectsBoundaryFileLimit(t *testing.T) {
 	}
 	if len(report.Notes) == 0 {
 		t.Fatal("expected an explanation for stopping before min-clusters")
+	}
+}
+
+func TestDiscoverReturnsStoppedCandidate(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "a/a.go", "package a\n")
+	write(t, root, "b/b.go", "package b\n")
+	report, err := Discover(root, DiscoverConfig{MinClusters: 1, MaxClusters: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Candidates) != 1 || report.Candidates[0].ClusterCount != 2 {
+		t.Fatalf("stopped candidate missing: %#v", report.Candidates)
 	}
 }
 
@@ -198,6 +318,13 @@ func TestCompareReportsDetectsArchitectureRegressions(t *testing.T) {
 	comparison := CompareReports(baseline, current)
 	if comparison.Passed || len(comparison.Regressions) != 6 {
 		t.Fatalf("unexpected comparison: %#v", comparison)
+	}
+}
+
+func TestCompareReportsRejectsDifferentScoringVersions(t *testing.T) {
+	result := CompareReports(Report{Version: "1", Score: 90}, Report{Version: "2", Score: 90})
+	if result.Passed || len(result.Regressions) != 1 || result.Regressions[0].Kind != "report-version" {
+		t.Fatalf("version mismatch was not rejected: %#v", result)
 	}
 }
 

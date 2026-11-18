@@ -8,6 +8,8 @@ type Config struct {
 	MinCochange      int            `json:"minCochange"`
 	MinLocalityRatio float64        `json:"minLocalityRatio"`
 	Exclude          []string       `json:"exclude"`
+	IncludeTests     bool           `json:"includeTests,omitempty"`
+	PolicyMode       string         `json:"policyMode,omitempty"`
 }
 
 type ModuleConfig struct {
@@ -21,26 +23,29 @@ type ModuleConfig struct {
 }
 
 type Report struct {
-	Version    string           `json:"version"`
-	Score      int              `json:"score"`
-	Confidence float64          `json:"confidence"`
-	Gate       string           `json:"gate"`
-	Files      int              `json:"files"`
-	Edges      int              `json:"edges"`
-	Components []ComponentScore `json:"components"`
-	Violations []Violation      `json:"violations"`
-	Cycles     [][]string       `json:"cycles"`
-	Modules    []ModuleReport   `json:"modules"`
-	Unknown    []string         `json:"unassignedFiles,omitempty"`
-	Notes      []string         `json:"notes,omitempty"`
+	Version         string           `json:"version"`
+	Score           int              `json:"score"`
+	NominalScore    int              `json:"nominalScore"`
+	EvaluatedPoints float64          `json:"evaluatedPoints"`
+	Confidence      float64          `json:"confidence"`
+	Gate            string           `json:"gate"`
+	Files           int              `json:"files"`
+	Edges           int              `json:"edges"`
+	Components      []ComponentScore `json:"components"`
+	Violations      []Violation      `json:"violations"`
+	Cycles          [][]string       `json:"cycles"`
+	Modules         []ModuleReport   `json:"modules"`
+	Unknown         []string         `json:"unassignedFiles,omitempty"`
+	Notes           []string         `json:"notes,omitempty"`
 }
 
 type ComponentScore struct {
-	Name       string  `json:"name"`
-	Score      int     `json:"score"`
-	Max        int     `json:"max"`
-	Detail     string  `json:"detail"`
-	Confidence float64 `json:"confidence"`
+	Name            string  `json:"name"`
+	Score           int     `json:"score"`
+	Max             int     `json:"max"`
+	Detail          string  `json:"detail"`
+	Confidence      float64 `json:"confidence"`
+	EvaluatedPoints float64 `json:"evaluatedPoints"`
 }
 
 type Violation struct {
@@ -63,6 +68,7 @@ type ModuleReport struct {
 	InternalEdges            int      `json:"internalEdges"`
 	ExternalEdges            int      `json:"externalEdges"`
 	Cohesion                 float64  `json:"cohesion"`
+	CohesionEvaluated        bool     `json:"cohesionEvaluated"`
 	ChangePartners           []string `json:"changePartners,omitempty"`
 	ChangeCoupling           float64  `json:"changeCoupling"`
 	ChangeCommits            int      `json:"changeCommits"`
@@ -74,6 +80,7 @@ type ModuleReport struct {
 	PublicSymbols            int      `json:"publicSymbols"`
 	PublicInboundEdges       int      `json:"publicInboundEdges"`
 	PrivateInboundViolations int      `json:"privateInboundViolations"`
+	Warnings                 []string `json:"warnings,omitempty"`
 }
 
 type sourceFile struct {
@@ -103,6 +110,7 @@ type DiscoverConfig struct {
 	MaxBoundarySize  int      `json:"maxBoundarySize"`
 	MaxBoundaryFiles int      `json:"maxBoundaryFiles"`
 	Exclude          []string `json:"exclude"`
+	DisableAutoScale bool     `json:"disableAutoScale"`
 }
 
 type DiscoveryReport struct {
@@ -134,6 +142,7 @@ type BoundaryCandidate struct {
 type SuggestedBoundary struct {
 	SuggestedName string           `json:"suggestedName"`
 	Units         []string         `json:"units"`
+	Paths         []string         `json:"paths"`
 	Files         int              `json:"files"`
 	Evidence      BoundaryEvidence `json:"evidence"`
 }
