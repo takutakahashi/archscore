@@ -1,0 +1,17 @@
+{
+  "maxFanOut": 4,
+  "historyCommits": 100,
+  "exclude": ["**/*_test.go"],
+  "modules": [
+    {
+      "name": "cli",
+      "paths": ["cmd/**"],
+      "mayDependOn": ["analyzer"]
+    },
+    {
+      "name": "analyzer",
+      "paths": ["internal/analyzer/**"],
+      "mayDependOn": []
+    }
+  ]
+}

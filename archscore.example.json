@@ -1,0 +1,27 @@
+{
+  "maxFanOut": 4,
+  "historyCommits": 100,
+  "exclude": ["**/*.test.ts", "**/*_test.go", "**/generated/**"],
+  "modules": [
+    {
+      "name": "domain",
+      "paths": ["src/domain/**", "internal/domain/**"],
+      "mayDependOn": []
+    },
+    {
+      "name": "application",
+      "paths": ["src/application/**", "internal/application/**"],
+      "mayDependOn": ["domain"]
+    },
+    {
+      "name": "infrastructure",
+      "paths": ["src/infrastructure/**", "internal/infrastructure/**"],
+      "mayDependOn": ["domain", "application"]
+    },
+    {
+      "name": "presentation",
+      "paths": ["src/presentation/**", "internal/presentation/**"],
+      "mayDependOn": ["application"]
+    }
+  ]
+}
