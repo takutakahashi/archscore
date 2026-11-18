@@ -42,6 +42,9 @@ func Discover(root string, cfg DiscoverConfig) (DiscoveryReport, error) {
 	if cfg.MaxBoundarySize <= 0 {
 		cfg.MaxBoundarySize = 12
 	}
+	if cfg.MaxBoundaryFiles <= 0 {
+		cfg.MaxBoundaryFiles = 100
+	}
 
 	abs, err := filepath.Abs(root)
 	if err != nil {
@@ -71,7 +74,7 @@ func Discover(root string, cfg DiscoverConfig) (DiscoveryReport, error) {
 		report.Notes = append(report.Notes, historyNote)
 	}
 	if len(candidates) > 0 && candidates[len(candidates)-1].ClusterCount > cfg.MinClusters {
-		report.Notes = append(report.Notes, fmt.Sprintf("stopped at %d clusters because no positive-affinity merge fit max-boundary-size %d", candidates[len(candidates)-1].ClusterCount, cfg.MaxBoundarySize))
+		report.Notes = append(report.Notes, fmt.Sprintf("stopped at %d clusters because no positive-affinity merge fit limits of %d units and %d files", candidates[len(candidates)-1].ClusterCount, cfg.MaxBoundarySize, cfg.MaxBoundaryFiles))
 	}
 	return report, nil
 }
@@ -94,7 +97,7 @@ func discoveryUnits(files map[string]*sourceFile) (map[string]discoveryUnit, map
 }
 
 func staticAffinities(edges []edge, fileUnit map[string]string) (map[string]float64, map[string]int, int) {
-	pairs, degrees := map[string]int{}, map[string]int{}
+	pairs, directed, degrees := map[string]int{}, map[string]int{}, map[string]int{}
 	total := 0
 	for _, e := range edges {
 		a, b := fileUnit[e.FromFile], fileUnit[e.ToFile]
@@ -102,6 +105,7 @@ func staticAffinities(edges []edge, fileUnit map[string]string) (map[string]floa
 			continue
 		}
 		pairs[pairKey(a, b)]++
+		directed[directedKey(a, b)]++
 		degrees[a]++
 		degrees[b]++
 		total++
@@ -109,7 +113,13 @@ func staticAffinities(edges []edge, fileUnit map[string]string) (map[string]floa
 	out := map[string]float64{}
 	for key, count := range pairs {
 		a, b := splitPair(key)
-		out[key] = float64(count) / math.Sqrt(float64(degrees[a]*degrees[b]))
+		base := float64(count) / math.Sqrt(float64(degrees[a]*degrees[b]))
+		forward, reverse := directed[directedKey(a, b)], directed[directedKey(b, a)]
+		balance := 0.0
+		if forward+reverse > 0 {
+			balance = 2 * float64(minInt(forward, reverse)) / float64(forward+reverse)
+		}
+		out[key] = base * (0.25 + 0.75*balance)
 	}
 	return out, pairs, total
 }
@@ -202,6 +212,9 @@ func clusterCandidates(units map[string]discoveryUnit, affinities map[string]aff
 		for i := 0; i < len(clusters); i++ {
 			for j := i + 1; j < len(clusters); j++ {
 				if len(clusters[i].units)+len(clusters[j].units) > cfg.MaxBoundarySize {
+					continue
+				}
+				if clusterFiles(clusters[i], units)+clusterFiles(clusters[j], units) > cfg.MaxBoundaryFiles {
 					continue
 				}
 				score := clusterAffinity(clusters[i], clusters[j], affinities)
@@ -324,6 +337,14 @@ func pairKey(a, b string) string {
 		a, b = b, a
 	}
 	return a + "\x00" + b
+}
+func directedKey(a, b string) string { return a + "\x00" + b }
+func clusterFiles(c cluster, units map[string]discoveryUnit) int {
+	total := 0
+	for _, u := range c.units {
+		total += units[u].files
+	}
+	return total
 }
 func splitPair(key string) (string, string) { p := strings.SplitN(key, "\x00", 2); return p[0], p[1] }
 

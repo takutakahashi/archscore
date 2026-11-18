@@ -1,21 +1,26 @@
 package analyzer
 
 type Config struct {
-	Modules        []ModuleConfig `json:"modules"`
-	MaxFanOut      int            `json:"maxFanOut"`
-	HistoryCommits int            `json:"historyCommits"`
-	Exclude        []string       `json:"exclude"`
+	Modules          []ModuleConfig `json:"modules"`
+	MaxFanOut        int            `json:"maxFanOut"`
+	HistoryCommits   int            `json:"historyCommits"`
+	MinModuleChanges int            `json:"minModuleChanges"`
+	MinCochange      int            `json:"minCochange"`
+	Exclude          []string       `json:"exclude"`
 }
 
 type ModuleConfig struct {
 	Name        string   `json:"name"`
 	Paths       []string `json:"paths"`
 	MayDependOn []string `json:"mayDependOn"`
+	Role        string   `json:"role,omitempty"`
+	MaxFanOut   *int     `json:"maxFanOut,omitempty"`
 }
 
 type Report struct {
 	Version    string           `json:"version"`
 	Score      int              `json:"score"`
+	Confidence float64          `json:"confidence"`
 	Gate       string           `json:"gate"`
 	Files      int              `json:"files"`
 	Edges      int              `json:"edges"`
@@ -28,10 +33,11 @@ type Report struct {
 }
 
 type ComponentScore struct {
-	Name   string `json:"name"`
-	Score  int    `json:"score"`
-	Max    int    `json:"max"`
-	Detail string `json:"detail"`
+	Name       string  `json:"name"`
+	Score      int     `json:"score"`
+	Max        int     `json:"max"`
+	Detail     string  `json:"detail"`
+	Confidence float64 `json:"confidence"`
 }
 
 type Violation struct {
@@ -45,16 +51,19 @@ type Violation struct {
 }
 
 type ModuleReport struct {
-	Name           string   `json:"name"`
-	Files          int      `json:"files"`
-	FanIn          int      `json:"fanIn"`
-	FanOut         int      `json:"fanOut"`
-	Instability    float64  `json:"instability"`
-	InternalEdges  int      `json:"internalEdges"`
-	ExternalEdges  int      `json:"externalEdges"`
-	Cohesion       float64  `json:"cohesion"`
-	ChangePartners []string `json:"changePartners,omitempty"`
-	ChangeCoupling float64  `json:"changeCoupling"`
+	Name            string   `json:"name"`
+	Files           int      `json:"files"`
+	Units           int      `json:"units"`
+	FanIn           int      `json:"fanIn"`
+	FanOut          int      `json:"fanOut"`
+	Instability     float64  `json:"instability"`
+	InternalEdges   int      `json:"internalEdges"`
+	ExternalEdges   int      `json:"externalEdges"`
+	Cohesion        float64  `json:"cohesion"`
+	ChangePartners  []string `json:"changePartners,omitempty"`
+	ChangeCoupling  float64  `json:"changeCoupling"`
+	ChangeCommits   int      `json:"changeCommits"`
+	ChangeEvaluated bool     `json:"changeEvaluated"`
 }
 
 type sourceFile struct {
@@ -76,12 +85,13 @@ type edge struct {
 }
 
 type DiscoverConfig struct {
-	MinClusters     int      `json:"minClusters"`
-	MaxClusters     int      `json:"maxClusters"`
-	HistoryCommits  int      `json:"historyCommits"`
-	MinCochange     int      `json:"minCochange"`
-	MaxBoundarySize int      `json:"maxBoundarySize"`
-	Exclude         []string `json:"exclude"`
+	MinClusters      int      `json:"minClusters"`
+	MaxClusters      int      `json:"maxClusters"`
+	HistoryCommits   int      `json:"historyCommits"`
+	MinCochange      int      `json:"minCochange"`
+	MaxBoundarySize  int      `json:"maxBoundarySize"`
+	MaxBoundaryFiles int      `json:"maxBoundaryFiles"`
+	Exclude          []string `json:"exclude"`
 }
 
 type DiscoveryReport struct {

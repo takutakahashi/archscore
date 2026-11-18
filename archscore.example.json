@@ -1,6 +1,8 @@
 {
   "maxFanOut": 4,
   "historyCommits": 100,
+  "minModuleChanges": 5,
+  "minCochange": 3,
   "exclude": ["**/*.test.ts", "**/*_test.go", "**/generated/**"],
   "modules": [
     {

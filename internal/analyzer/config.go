@@ -24,6 +24,12 @@ func LoadConfig(path string) (Config, error) {
 	if cfg.HistoryCommits <= 0 {
 		cfg.HistoryCommits = 100
 	}
+	if cfg.MinModuleChanges <= 0 {
+		cfg.MinModuleChanges = 5
+	}
+	if cfg.MinCochange <= 0 {
+		cfg.MinCochange = 3
+	}
 	seen := map[string]bool{}
 	for _, m := range cfg.Modules {
 		if m.Name == "" || len(m.Paths) == 0 {

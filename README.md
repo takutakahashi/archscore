@@ -33,7 +33,8 @@ go run ./cmd/archscore discover \
   -min-clusters 8 \
   -max-clusters 30 \
   -history 200 \
-  -max-boundary-size 12
+  -max-boundary-size 12 \
+  -max-boundary-files 100
 ```
 
 The atomic unit is a Go package or TypeScript source directory. Deterministic
@@ -50,6 +51,26 @@ result. The output contains coarse, middle, and fine candidates with evidence
 for every suggested boundary. Candidates are starting points for architectural
 judgment, not automatically approved policies.
 
+Modules can declare architecture roles and local coupling thresholds. A
+`composition-root` is not penalized for fan-out because wiring dependencies is
+its responsibility:
+
+```json
+{
+  "name": "commands",
+  "paths": ["cmd/**"],
+  "role": "composition-root",
+  "maxFanOut": 0,
+  "mayDependOn": ["application", "infrastructure"]
+}
+```
+
+Change coupling is evaluated only after `minModuleChanges` (default 5), and a
+relationship needs `minCochange` shared commits (default 3). Insufficient
+history receives a neutral score with reduced report confidence rather than a
+penalty. Single-package Go modules also receive neutral cohesion because files
+inside a Go package do not import one another.
+
 ## Scoring (100 points)
 
 | Component | Points | Deterministic input |
@@ -60,6 +81,10 @@ judgment, not automatically approved policies.
 | Cohesion | 10 | internal / all resolved module edges |
 | Module coverage | 10 | source files assigned to a module |
 | Change locality | 5 | cross-module co-change in recent commits |
+
+The top-level `confidence` is the point-weighted fraction of evidence that was
+actually evaluable. Each component also reports its own confidence. A neutral
+score with low confidence means “insufficient evidence,” not “known good.”
 
 Boundary violations and cycles fail the gate independently of the numeric
 score. Every violation includes its source file, line, import and module pair.

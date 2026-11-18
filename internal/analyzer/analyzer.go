@@ -21,6 +21,18 @@ var (
 )
 
 func Analyze(root string, cfg Config) (Report, error) {
+	if cfg.MaxFanOut <= 0 {
+		cfg.MaxFanOut = 5
+	}
+	if cfg.HistoryCommits <= 0 {
+		cfg.HistoryCommits = 100
+	}
+	if cfg.MinModuleChanges <= 0 {
+		cfg.MinModuleChanges = 5
+	}
+	if cfg.MinCochange <= 0 {
+		cfg.MinCochange = 3
+	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return Report{}, err
@@ -32,6 +44,11 @@ func Analyze(root string, cfg Config) (Report, error) {
 	edges := resolveEdges(files, modulePath)
 	report := buildReport(files, edges, cfg)
 	applyHistory(abs, files, cfg, &report)
+	weightedConfidence := 0.0
+	for _, component := range report.Components {
+		weightedConfidence += float64(component.Max) * component.Confidence
+	}
+	report.Confidence = round(weightedConfidence / 100)
 	return report, nil
 }
 
@@ -267,8 +284,16 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	cycles := maxInt(0, 25-len(r.Cycles)*10)
 	over := 0
 	for _, m := range r.Modules {
-		if m.FanOut > cfg.MaxFanOut {
-			over += m.FanOut - cfg.MaxFanOut
+		moduleCfg := findModuleConfig(cfg.Modules, m.Name)
+		if moduleCfg.Role == "composition-root" {
+			continue
+		}
+		threshold := cfg.MaxFanOut
+		if moduleCfg.MaxFanOut != nil {
+			threshold = *moduleCfg.MaxFanOut
+		}
+		if threshold > 0 && m.FanOut > threshold {
+			over += m.FanOut - threshold
 		}
 	}
 	coupling := maxInt(0, 15-over*3)
@@ -286,16 +311,25 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		coverage = int(math.Round(10 * float64(len(files)-len(r.Unknown)) / float64(len(files))))
 	}
 	r.Components = []ComponentScore{
-		{"boundaries", boundary, 35, fmt.Sprintf("%d forbidden dependency edges", len(r.Violations))},
-		{"acyclicity", cycles, 25, fmt.Sprintf("%d module cycles", len(r.Cycles))},
-		{"coupling", coupling, 15, fmt.Sprintf("fan-out threshold %d", cfg.MaxFanOut)},
-		{"cohesion", cohesion, 10, "ratio of internal to all resolved edges"},
-		{"module-coverage", coverage, 10, fmt.Sprintf("%d unassigned files", len(r.Unknown))},
+		{"boundaries", boundary, 35, fmt.Sprintf("%d forbidden dependency edges", len(r.Violations)), 1},
+		{"acyclicity", cycles, 25, fmt.Sprintf("%d module cycles", len(r.Cycles)), 1},
+		{"coupling", coupling, 15, fmt.Sprintf("default fan-out threshold %d; composition roots exempt", cfg.MaxFanOut), 1},
+		{"cohesion", cohesion, 10, "cross-package internal edge ratio; single-package modules are neutral", 1},
+		{"module-coverage", coverage, 10, fmt.Sprintf("%d unassigned files", len(r.Unknown)), 1},
 	}
 	for _, c := range r.Components {
 		r.Score += c.Score
 	}
 	return r
+}
+
+func findModuleConfig(configs []ModuleConfig, name string) ModuleConfig {
+	for _, config := range configs {
+		if config.Name == name {
+			return config
+		}
+	}
+	return ModuleConfig{}
 }
 
 func moduleReports(files map[string]*sourceFile, edges []edge, cfg Config) []ModuleReport {
@@ -307,6 +341,16 @@ func moduleReports(files map[string]*sourceFile, edges []edge, cfg Config) []Mod
 		if reports[f.Module] != nil {
 			reports[f.Module].Files++
 		}
+	}
+	unitSets := map[string]map[string]bool{}
+	for _, f := range files {
+		if reports[f.Module] == nil {
+			continue
+		}
+		if unitSets[f.Module] == nil {
+			unitSets[f.Module] = map[string]bool{}
+		}
+		unitSets[f.Module][filepath.ToSlash(filepath.Dir(f.Path))] = true
 	}
 	in, out := map[string]map[string]bool{}, map[string]map[string]bool{}
 	for _, e := range edges {
@@ -330,12 +374,13 @@ func moduleReports(files map[string]*sourceFile, edges []edge, cfg Config) []Mod
 	result := make([]ModuleReport, 0, len(cfg.Modules))
 	for _, c := range cfg.Modules {
 		r := reports[c.Name]
+		r.Units = len(unitSets[c.Name])
 		r.FanIn, r.FanOut = len(in[c.Name]), len(out[c.Name])
 		if r.FanIn+r.FanOut > 0 {
 			r.Instability = round(float64(r.FanOut) / float64(r.FanIn+r.FanOut))
 		}
 		total := r.InternalEdges + r.ExternalEdges
-		if total == 0 {
+		if r.Units <= 1 || total == 0 {
 			r.Cohesion = 1
 		} else {
 			r.Cohesion = round(float64(r.InternalEdges) / float64(total))
@@ -402,7 +447,8 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 	cmd.Args = append(cmd.Args, "--relative", "--", ".")
 	b, err := cmd.Output()
 	if err != nil {
-		report.Components = append(report.Components, ComponentScore{"change-locality", 0, 5, "git history unavailable"})
+		report.Components = append(report.Components, ComponentScore{"change-locality", 5, 5, "git history unavailable; neutral score", 0})
+		report.Score += 5
 		report.Notes = append(report.Notes, "git history unavailable; change-coupling score omitted")
 		return
 	}
@@ -433,15 +479,25 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		}
 	}
 	if matchedCommits == 0 {
-		report.Components = append(report.Components, ComponentScore{"change-locality", 0, 5, "no matching git history"})
+		report.Components = append(report.Components, ComponentScore{"change-locality", 5, 5, "no matching git history; neutral score", 0})
+		report.Score += 5
 		report.Notes = append(report.Notes, "no analyzed source files were found in git history; change-coupling score omitted")
 		return
 	}
-	totalPenalty := 0
+	totalPenalty, evaluated := 0, 0
 	for i := range report.Modules {
 		m := &report.Modules[i]
+		m.ChangeCommits = counts[m.Name]
+		if m.ChangeCommits < cfg.MinModuleChanges {
+			continue
+		}
+		m.ChangeEvaluated = true
+		evaluated++
 		best := 0.0
 		for p, n := range pairs[m.Name] {
+			if n < cfg.MinCochange {
+				continue
+			}
 			ratio := float64(n) / float64(maxInt(1, counts[m.Name]))
 			if ratio >= 0.5 {
 				m.ChangePartners = append(m.ChangePartners, p)
@@ -459,7 +515,8 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		}
 	}
 	score := maxInt(0, 5-totalPenalty)
-	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("analyzed %d matching commits (up to %d)", matchedCommits, cfg.HistoryCommits)})
+	confidence := float64(evaluated) / float64(maxInt(1, len(report.Modules)))
+	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("evaluated %d/%d modules from %d matching commits", evaluated, len(report.Modules), matchedCommits), round(confidence)})
 	report.Score += score
 }
 
