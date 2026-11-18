@@ -353,7 +353,20 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		}
 	}
 	sort.Strings(r.Unknown)
-	boundary := maxInt(0, 30-len(r.Violations)*6)
+	dependencyPairs, violatingPairs := map[string]bool{}, map[string]bool{}
+	for _, dependency := range edges {
+		if dependency.FromModule != "" && dependency.ToModule != "" && dependency.FromModule != dependency.ToModule {
+			dependencyPairs[directedKey(dependency.FromModule, dependency.ToModule)] = true
+		}
+	}
+	for _, violation := range r.Violations {
+		violatingPairs[violation.Kind+"\x00"+directedKey(violation.FromModule, violation.ToModule)] = true
+	}
+	boundary := 30
+	if len(dependencyPairs) > 0 {
+		boundary = int(math.Round(30 * (1 - float64(len(violatingPairs))/float64(len(dependencyPairs)))))
+		boundary = maxInt(0, boundary)
+	}
 	activeModules, cyclicModules := 0, map[string]bool{}
 	for _, module := range r.Modules {
 		if module.Files > 0 {
@@ -438,7 +451,7 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		boundaryConfidence = 0
 	}
 	r.Components = []ComponentScore{
-		{"boundaries", boundary, 30, fmt.Sprintf("%d forbidden or private dependency edges; policy mode %s", len(r.Violations), effectivePolicyMode(cfg.PolicyMode)), boundaryConfidence, 0},
+		{"boundaries", boundary, 30, fmt.Sprintf("%d/%d observed dependency pairs violate policy across %d import edges; policy mode %s", len(violatingPairs), len(dependencyPairs), len(r.Violations), effectivePolicyMode(cfg.PolicyMode)), boundaryConfidence, 0},
 		{"acyclicity", cycles, 20, fmt.Sprintf("%d/%d active modules participate in %d strongly connected components", len(cyclicModules), activeModules, len(r.Cycles)), 1, 0},
 		{"public-contract", publicScore, 10, fmt.Sprintf("%d/%d modules declare public paths", publicConfigured, len(r.Modules)), round(publicConfidence), 0},
 		{"coupling", coupling, 15, fmt.Sprintf("effective default fan-out threshold %d; %d/%d modules exceed it; composition roots exempt", maxInt(cfg.MaxFanOut, scaleThreshold), over, eligible), 1, 0},
