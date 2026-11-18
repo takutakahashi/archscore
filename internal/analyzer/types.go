@@ -30,6 +30,7 @@ type Report struct {
 	NominalScore     int               `json:"nominalScore"`
 	EvaluatedPoints  float64           `json:"evaluatedPoints"`
 	Confidence       float64           `json:"confidence"`
+	AnalysisCoverage float64           `json:"analysisCoverage"`
 	Gate             string            `json:"gate"`
 	Files            int               `json:"files"`
 	Edges            int               `json:"edges"`

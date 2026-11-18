@@ -438,8 +438,10 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		cohesionConfidence = float64(cohesionWeight) / float64(totalCohesionWeight)
 	}
 	coverage := 10
+	r.AnalysisCoverage = 1
 	if len(files) > 0 {
-		coverage = int(math.Round(10 * float64(len(files)-len(r.Unknown)) / float64(len(files))))
+		r.AnalysisCoverage = float64(len(files)-len(r.Unknown)) / float64(len(files))
+		coverage = int(math.Round(10 * r.AnalysisCoverage))
 	}
 	publicWeightedScore, publicConfigured, publicCoveredWeight, publicTotalWeight := 0, 0, 0, 0
 	for _, module := range r.Modules {
@@ -808,8 +810,15 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 func finalizeScores(report *Report) {
 	earned, evaluated := 0.0, 0.0
 	report.NominalScore = 0
+	analysisCoverage := report.AnalysisCoverage
+	if report.Files == 0 && analysisCoverage == 0 {
+		analysisCoverage = 1
+	}
 	for i := range report.Components {
 		component := &report.Components[i]
+		if component.Name != "module-coverage" {
+			component.Confidence = round(component.Confidence * analysisCoverage)
+		}
 		component.EvaluatedPoints = round(float64(component.Max) * component.Confidence)
 		evaluated += component.EvaluatedPoints
 		earned += float64(component.Score) * component.Confidence
