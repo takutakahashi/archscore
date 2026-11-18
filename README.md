@@ -141,9 +141,8 @@ score. Every violation includes its source file, line, import and module pair.
   package workspace aliases are not yet resolved.
 - Tests are excluded by default. Generated code and other repository-specific
   sources should be excluded explicitly when they should not affect the score.
-- If the Go parser encounters newer syntax, a conservative import/export
-  scanner keeps analysis operational; rebuilding with the target Go version
-  remains the most precise option.
+- Build archscore with the latest stable Go release. Syntax unsupported by the
+  build toolchain is reported as an analysis error rather than approximated.
 - Export counting measures declarations, not the full type-level API surface
   such as every exported struct field.
 - Cohesion and change locality are indicators, not universal design truths.

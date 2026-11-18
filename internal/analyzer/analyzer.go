@@ -19,8 +19,6 @@ import (
 var (
 	tsImport = regexp.MustCompile(`(?m)(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?["']([^"']+)["']|require\s*\(\s*["']([^"']+)["']\s*\)|import\s*\(\s*["']([^"']+)["']\s*\)`)
 	goModule = regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
-	goImport = regexp.MustCompile(`(?m)^\s*(?:[\w.]+\s+)?"([^"]+)"`)
-	goExport = regexp.MustCompile(`(?m)^\s*(?:func\s+(?:\([^\n]*\)\s*)?|type\s+|(?:var|const)\s+(?:\(\s*)?)([A-Z][A-Za-z0-9_]*)`)
 )
 
 func Analyze(root string, cfg Config) (Report, error) {
@@ -111,11 +109,7 @@ func countExports(path, ext string) (int, error) {
 	if ext == ".go" {
 		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if err != nil {
-			b, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return 0, readErr
-			}
-			return len(goExport.FindAllSubmatch(b, -1)), nil
+			return 0, err
 		}
 		count := 0
 		for _, decl := range f.Decls {
@@ -164,7 +158,7 @@ func parseImports(path, ext string) ([]sourceImport, error) {
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
 		if err != nil {
-			return fallbackGoImports(path)
+			return nil, err
 		}
 		out := make([]sourceImport, 0, len(f.Imports))
 		for _, imp := range f.Imports {
@@ -192,33 +186,6 @@ func parseImports(path, ext string) ([]sourceImport, error) {
 		if pos >= 0 {
 			out = append(out, sourceImport{Path: value, Line: 1 + strings.Count(clean[:pos], "\n")})
 		}
-	}
-	return out, nil
-}
-
-func fallbackGoImports(path string) ([]sourceImport, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	text := string(b)
-	start := strings.Index(text, "import")
-	if start < 0 {
-		return nil, nil
-	}
-	section := text[start:]
-	if open := strings.Index(section, "("); open >= 0 {
-		if close := strings.Index(section[open+1:], ")"); close >= 0 {
-			section = section[open+1 : open+1+close]
-		}
-	} else if newline := strings.IndexByte(section, '\n'); newline >= 0 {
-		section = section[:newline]
-	}
-	var out []sourceImport
-	for _, match := range goImport.FindAllStringSubmatchIndex(section, -1) {
-		value := section[match[2]:match[3]]
-		pos := start + match[2]
-		out = append(out, sourceImport{Path: value, Line: 1 + strings.Count(text[:pos], "\n")})
 	}
 	return out, nil
 }

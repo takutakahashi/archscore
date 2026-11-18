@@ -180,20 +180,6 @@ func TestTestsAreExcludedUnlessRequested(t *testing.T) {
 	}
 }
 
-func TestGoParserFallbackHandlesUnknownSyntax(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, "future.go")
-	write(t, root, "future.go", "package future\nimport (\n \"context\"\n alias \"example.test/api\"\n)\nfunc (x X) Future[T any]() {}\ntype Exported struct{}\n")
-	imports, err := fallbackGoImports(path)
-	if err != nil || len(imports) != 2 || imports[1].Path != "example.test/api" {
-		t.Fatalf("fallback imports: %#v, %v", imports, err)
-	}
-	exports, err := countExports(path, ".go")
-	if err != nil || exports != 2 {
-		t.Fatalf("fallback exports=%d err=%v", exports, err)
-	}
-}
-
 func TestDiscoverAutoScalesClusterCapacity(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "go.mod", "module example.test/app\n")
