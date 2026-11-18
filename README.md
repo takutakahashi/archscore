@@ -23,6 +23,33 @@ Exit codes are `0` for a passing architecture, `2` when a forbidden dependency
 or cycle trips the gate, and `1` for configuration or analysis errors. Output is
 JSON so CI can archive, compare, or render it.
 
+## Discover boundary candidates
+
+`discover` proposes boundaries before an `archscore.json` policy exists:
+
+```sh
+go run ./cmd/archscore discover \
+  -root /path/to/repository \
+  -min-clusters 8 \
+  -max-clusters 30 \
+  -history 200 \
+  -max-boundary-size 12
+```
+
+The atomic unit is a Go package or TypeScript source directory. Deterministic
+agglomerative clustering combines three normalized signals:
+
+- static dependency affinity: 50%
+- Git co-change Jaccard affinity: 40%
+- path vocabulary affinity: 10%
+
+Co-change evidence requires at least three shared commits by default. Generic
+path words such as `internal`, `pkg`, and `src` are ignored. Equal merge scores
+are resolved by lexical order, so the same source and history produce the same
+result. The output contains coarse, middle, and fine candidates with evidence
+for every suggested boundary. Candidates are starting points for architectural
+judgment, not automatically approved policies.
+
 ## Scoring (100 points)
 
 | Component | Points | Deterministic input |
@@ -46,3 +73,5 @@ score. Every violation includes its source file, line, import and module pair.
   excluded explicitly when they should not affect the score.
 - Cohesion and change coupling are indicators, not universal design truths.
   The declared dependency policy is the authoritative architectural intent.
+- Boundary discovery uses directory-level TypeScript units and does not yet
+  infer workspace aliases or semantic domain vocabulary.
