@@ -312,6 +312,27 @@ func TestObservationalPolicyExcludesBoundaryPoints(t *testing.T) {
 	}
 }
 
+func TestBoundaryScoreUsesViolationBreadthNotDuplicateImports(t *testing.T) {
+	modules := []ModuleConfig{{Name: "a"}, {Name: "b"}, {Name: "c"}}
+	files := map[string]*sourceFile{
+		"a/a.go": {Path: "a/a.go", Module: "a"},
+		"b/b.go": {Path: "b/b.go", Module: "b"},
+		"c/c.go": {Path: "c/c.go", Module: "c"},
+	}
+	edges := []edge{
+		{FromFile: "a/1.go", ToFile: "b/b.go", FromModule: "a", ToModule: "b"},
+		{FromFile: "a/2.go", ToFile: "b/b.go", FromModule: "a", ToModule: "b"},
+		{FromFile: "a/3.go", ToFile: "b/b.go", FromModule: "a", ToModule: "b"},
+		{FromFile: "a/a.go", ToFile: "c/c.go", FromModule: "a", ToModule: "c"},
+	}
+	modules[0].MayDependOn = []string{"c"}
+	report := buildReport(files, edges, Config{Modules: modules})
+	component := report.Components[0]
+	if component.Score != 15 || component.Detail != "1/2 observed dependency pairs violate policy across 3 import edges; policy mode enforced" {
+		t.Fatalf("duplicate imports distorted boundary score: %#v", component)
+	}
+}
+
 func TestDiscoverRespectsBoundaryFileLimit(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "go.mod", "module example.test/app\n")

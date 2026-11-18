@@ -147,6 +147,11 @@ denominator. `nominalScore` retains the unnormalized sum for diagnostics,
 `confidence` is `evaluatedPoints / 100`. Each component reports the same
 information.
 
+Boundary compliance is scored by the share of observed directed module pairs
+that violate policy. Repeating the same forbidden import in many files remains
+visible in the violation list but does not multiply the architectural breadth
+of the violation.
+
 Public-contract scoring only considers modules declaring `publicPaths`.
 Cohesion excludes single-package or edge-free modules and weights the remaining
 modules by dependency edges. Change locality only scores modules with enough
