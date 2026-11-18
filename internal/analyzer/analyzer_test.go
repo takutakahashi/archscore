@@ -456,6 +456,34 @@ func TestGlob(t *testing.T) {
 	}
 }
 
+func TestAnalyzeRejectsOverlappingModulePaths(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "internal/service/a.go", "package service\n")
+	_, err := Analyze(root, Config{Modules: []ModuleConfig{
+		{Name: "parent", Paths: []string{"internal/**"}},
+		{Name: "service", Paths: []string{"internal/service/**"}},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "matches multiple modules: parent, service") {
+		t.Fatalf("expected overlap error, got %v", err)
+	}
+}
+
+func TestEmptyPublicPathIsNotEvidence(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "feature/impl.go", "package feature\n")
+	report, err := Analyze(root, Config{Modules: []ModuleConfig{{
+		Name: "feature", Paths: []string{"feature/**"}, PublicPaths: []string{"feature/public/**"},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Components[2].Confidence != 0 || len(report.Modules[0].Warnings) != 1 {
+		t.Fatalf("empty public path counted as evidence: %#v", report)
+	}
+}
+
 func write(t *testing.T, root, name, body string) {
 	t.Helper()
 	p := filepath.Join(root, name)
