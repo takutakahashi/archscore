@@ -30,6 +30,9 @@ func LoadConfig(path string) (Config, error) {
 	if cfg.MinCochange <= 0 {
 		cfg.MinCochange = 3
 	}
+	if cfg.MinLocalityRatio <= 0 {
+		cfg.MinLocalityRatio = 0.8
+	}
 	seen := map[string]bool{}
 	for _, m := range cfg.Modules {
 		if m.Name == "" || len(m.Paths) == 0 {

@@ -66,8 +66,11 @@ func TestHistoryFromRepositorySubdirectory(t *testing.T) {
 	if len(r.Modules[0].ChangePartners) != 1 || r.Modules[0].ChangePartners[0] != "b" {
 		t.Fatalf("subdirectory history was not matched: %#v", r.Modules)
 	}
+	if r.Modules[0].ChangeLocality != .5 || r.Modules[0].ContainedChanges != 1 {
+		t.Fatalf("unexpected locality: %#v", r.Modules[0])
+	}
 	last := r.Components[len(r.Components)-1]
-	if last.Name != "change-locality" || last.Detail != "evaluated 2/2 modules from 2 matching commits" {
+	if last.Name != "change-locality" || last.Detail != "evaluated 2/2 modules; target 80% contained changes" {
 		t.Fatalf("unexpected history component: %#v", last)
 	}
 }
@@ -118,13 +121,13 @@ func TestCompositionRootIsExemptFromFanOutPenalty(t *testing.T) {
 		edges = append(edges, edge{FromFile: "root/main.go", ToFile: name + "/x.go", FromModule: "root", ToModule: name})
 	}
 	report := buildReport(files, edges, Config{Modules: modules, MaxFanOut: 2})
-	if report.Components[2].Score != 15 {
-		t.Fatalf("composition root was penalized: %#v", report.Components[2])
+	if report.Components[3].Score != 15 {
+		t.Fatalf("composition root was penalized: %#v", report.Components[3])
 	}
 	modules[0].Role = ""
 	report = buildReport(files, edges, Config{Modules: modules, MaxFanOut: 2})
-	if report.Components[2].Score >= 15 {
-		t.Fatalf("ordinary module was not penalized: %#v", report.Components[2])
+	if report.Components[3].Score >= 15 {
+		t.Fatalf("ordinary module was not penalized: %#v", report.Components[3])
 	}
 }
 
@@ -157,6 +160,44 @@ func TestDiscoverRespectsBoundaryFileLimit(t *testing.T) {
 	}
 	if len(report.Notes) == 0 {
 		t.Fatal("expected an explanation for stopping before min-clusters")
+	}
+}
+
+func TestPublicContractRejectsPrivateImportsAndCountsExports(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "provider/api/api.go", "package api\ntype Client struct{}\nfunc New() Client { return Client{} }\n")
+	write(t, root, "provider/internal/impl.go", "package internal\ntype Secret struct{}\n")
+	write(t, root, "consumer/use.go", "package consumer\nimport \"example.test/app/provider/internal\"\n")
+	limit := 1
+	cfg := Config{Modules: []ModuleConfig{
+		{Name: "provider", Paths: []string{"provider/**"}, PublicPaths: []string{"provider/api/**"}, MaxPublicSymbols: &limit},
+		{Name: "consumer", Paths: []string{"consumer/**"}, MayDependOn: []string{"provider"}},
+	}}
+	report, err := Analyze(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Violations) != 1 || report.Violations[0].Kind != "private-dependency" {
+		t.Fatalf("private import not rejected: %#v", report.Violations)
+	}
+	if report.Modules[0].PublicSymbols != 2 {
+		t.Fatalf("exports=%d", report.Modules[0].PublicSymbols)
+	}
+	if report.Modules[0].PrivateInboundViolations != 1 {
+		t.Fatalf("private inbound=%d", report.Modules[0].PrivateInboundViolations)
+	}
+	if report.Components[2].Name != "public-contract" || report.Components[2].Score != 8 {
+		t.Fatalf("public contract score: %#v", report.Components[2])
+	}
+}
+
+func TestCompareReportsDetectsArchitectureRegressions(t *testing.T) {
+	baseline := Report{Score: 90, Confidence: 1, Modules: []ModuleReport{{Name: "api", PublicSymbols: 2}}}
+	current := Report{Score: 85, Confidence: .8, Violations: []Violation{{Kind: "private-dependency", FromModule: "a", ToModule: "b", FromFile: "a/x.go", Line: 3}}, Cycles: [][]string{{"a", "b"}}, Unknown: []string{"unknown.go"}, Modules: []ModuleReport{{Name: "api", PublicSymbols: 3}}}
+	comparison := CompareReports(baseline, current)
+	if comparison.Passed || len(comparison.Regressions) != 6 {
+		t.Fatalf("unexpected comparison: %#v", comparison)
 	}
 }
 

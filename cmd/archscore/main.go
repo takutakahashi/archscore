@@ -14,7 +14,39 @@ func main() {
 		discover(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "compare" {
+		compare(os.Args[2:])
+		return
+	}
 	analyze(os.Args[1:])
+}
+
+func compare(args []string) {
+	flags := flag.NewFlagSet("archscore compare", flag.ExitOnError)
+	baselinePath := flags.String("baseline", "", "baseline report JSON")
+	currentPath := flags.String("current", "", "current report JSON")
+	failOnRegression := flags.Bool("fail-on-regression", false, "exit 2 when regressions are found")
+	pretty := flags.Bool("pretty", true, "pretty-print JSON")
+	_ = flags.Parse(args)
+	if *baselinePath == "" || *currentPath == "" {
+		fatal(fmt.Errorf("baseline and current are required"))
+	}
+	read := func(path string) analyzer.Report {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			fatal(err)
+		}
+		var report analyzer.Report
+		if err := json.Unmarshal(b, &report); err != nil {
+			fatal(err)
+		}
+		return report
+	}
+	result := analyzer.CompareReports(read(*baselinePath), read(*currentPath))
+	printJSON(result, *pretty)
+	if *failOnRegression && !result.Passed {
+		os.Exit(2)
+	}
 }
 
 func analyze(args []string) {

@@ -6,15 +6,18 @@ type Config struct {
 	HistoryCommits   int            `json:"historyCommits"`
 	MinModuleChanges int            `json:"minModuleChanges"`
 	MinCochange      int            `json:"minCochange"`
+	MinLocalityRatio float64        `json:"minLocalityRatio"`
 	Exclude          []string       `json:"exclude"`
 }
 
 type ModuleConfig struct {
-	Name        string   `json:"name"`
-	Paths       []string `json:"paths"`
-	MayDependOn []string `json:"mayDependOn"`
-	Role        string   `json:"role,omitempty"`
-	MaxFanOut   *int     `json:"maxFanOut,omitempty"`
+	Name             string   `json:"name"`
+	Paths            []string `json:"paths"`
+	MayDependOn      []string `json:"mayDependOn"`
+	Role             string   `json:"role,omitempty"`
+	MaxFanOut        *int     `json:"maxFanOut,omitempty"`
+	PublicPaths      []string `json:"publicPaths,omitempty"`
+	MaxPublicSymbols *int     `json:"maxPublicSymbols,omitempty"`
 }
 
 type Report struct {
@@ -51,25 +54,33 @@ type Violation struct {
 }
 
 type ModuleReport struct {
-	Name            string   `json:"name"`
-	Files           int      `json:"files"`
-	Units           int      `json:"units"`
-	FanIn           int      `json:"fanIn"`
-	FanOut          int      `json:"fanOut"`
-	Instability     float64  `json:"instability"`
-	InternalEdges   int      `json:"internalEdges"`
-	ExternalEdges   int      `json:"externalEdges"`
-	Cohesion        float64  `json:"cohesion"`
-	ChangePartners  []string `json:"changePartners,omitempty"`
-	ChangeCoupling  float64  `json:"changeCoupling"`
-	ChangeCommits   int      `json:"changeCommits"`
-	ChangeEvaluated bool     `json:"changeEvaluated"`
+	Name                     string   `json:"name"`
+	Files                    int      `json:"files"`
+	Units                    int      `json:"units"`
+	FanIn                    int      `json:"fanIn"`
+	FanOut                   int      `json:"fanOut"`
+	Instability              float64  `json:"instability"`
+	InternalEdges            int      `json:"internalEdges"`
+	ExternalEdges            int      `json:"externalEdges"`
+	Cohesion                 float64  `json:"cohesion"`
+	ChangePartners           []string `json:"changePartners,omitempty"`
+	ChangeCoupling           float64  `json:"changeCoupling"`
+	ChangeCommits            int      `json:"changeCommits"`
+	ChangeEvaluated          bool     `json:"changeEvaluated"`
+	ContainedChanges         int      `json:"containedChanges"`
+	ChangeLocality           float64  `json:"changeLocality"`
+	PublicFiles              int      `json:"publicFiles"`
+	PublicUnits              int      `json:"publicUnits"`
+	PublicSymbols            int      `json:"publicSymbols"`
+	PublicInboundEdges       int      `json:"publicInboundEdges"`
+	PrivateInboundViolations int      `json:"privateInboundViolations"`
 }
 
 type sourceFile struct {
 	Path    string
 	Module  string
 	Imports []sourceImport
+	Exports int
 }
 
 type sourceImport struct {
@@ -133,4 +144,20 @@ type BoundaryEvidence struct {
 	ChangeAffinity          float64 `json:"changeAffinity"`
 	VocabularyAffinity      float64 `json:"vocabularyAffinity"`
 	CombinedAffinity        float64 `json:"combinedAffinity"`
+}
+
+type ComparisonReport struct {
+	BaselineScore      int          `json:"baselineScore"`
+	CurrentScore       int          `json:"currentScore"`
+	ScoreDelta         int          `json:"scoreDelta"`
+	BaselineConfidence float64      `json:"baselineConfidence"`
+	CurrentConfidence  float64      `json:"currentConfidence"`
+	Regressions        []Regression `json:"regressions"`
+	Improvements       []Regression `json:"improvements,omitempty"`
+	Passed             bool         `json:"passed"`
+}
+
+type Regression struct {
+	Kind   string `json:"kind"`
+	Detail string `json:"detail"`
 }
