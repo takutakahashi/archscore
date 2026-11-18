@@ -89,12 +89,13 @@ func discover(args []string) {
 	maxBoundarySize := flags.Int("max-boundary-size", 12, "maximum source units in a suggested boundary")
 	maxBoundaryFiles := flags.Int("max-boundary-files", 100, "maximum source files in a suggested boundary")
 	autoScale := flags.Bool("auto-scale", true, "raise the cluster limit when required to fit all source units")
+	includeGeneratedHistory := flags.Bool("include-generated-history", false, "include generated source files in change affinity")
 	pretty := flags.Bool("pretty", true, "pretty-print JSON")
 	_ = flags.Parse(args)
 	report, err := analyzer.Discover(*root, analyzer.DiscoverConfig{
 		MinClusters: *minClusters, MaxClusters: *maxClusters, HistoryCommits: *history,
 		MinCochange: *minCochange, MaxBoundarySize: *maxBoundarySize, MaxBoundaryFiles: *maxBoundaryFiles,
-		Exclude: []string{"**/*_test.go", "**/*.test.ts", "**/*.test.tsx"}, DisableAutoScale: !*autoScale,
+		Exclude: []string{"**/*_test.go", "**/*.test.ts", "**/*.test.tsx"}, DisableAutoScale: !*autoScale, IncludeGeneratedHistory: *includeGeneratedHistory,
 	})
 	if err != nil {
 		fatal(err)

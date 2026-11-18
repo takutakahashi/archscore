@@ -56,6 +56,17 @@ func Discover(root string, cfg DiscoverConfig) (DiscoveryReport, error) {
 	}
 	edges := resolveEdges(files, goMod)
 	units, fileUnit := discoveryUnits(files)
+	historyFileUnit := make(map[string]string, len(fileUnit))
+	generatedFiles := 0
+	for path, unit := range fileUnit {
+		if files[path].Generated {
+			generatedFiles++
+			if !cfg.IncludeGeneratedHistory {
+				continue
+			}
+		}
+		historyFileUnit[path] = unit
+	}
 	if len(units) == 0 {
 		return DiscoveryReport{}, fmt.Errorf("no Go or TypeScript source units found")
 	}
@@ -68,11 +79,11 @@ func Discover(root string, cfg DiscoverConfig) (DiscoveryReport, error) {
 	}
 
 	static, edgeCounts, totalEdges := staticAffinities(edges, fileUnit)
-	change, historyCount, historyNote := changeAffinities(abs, fileUnit, cfg)
+	change, historyCount, historyNote := changeAffinities(abs, historyFileUnit, cfg)
 	affinities := combinedAffinities(units, static, change)
 	candidates := clusterCandidates(units, affinities, edgeCounts, totalEdges, cfg)
 	report := DiscoveryReport{
-		Version: "1", Units: len(units), Files: len(files), DependencyEdges: totalEdges,
+		Version: "1", Units: len(units), Files: len(files), GeneratedFiles: generatedFiles, DependencyEdges: totalEdges,
 		HistoryCommits: historyCount,
 		Weights:        DiscoveryWeights{Static: 0.5, Change: 0.4, Vocabulary: 0.1},
 		Candidates:     candidates,

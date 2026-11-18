@@ -83,6 +83,12 @@ Test sources (`*_test.go`, `*.test.ts(x)`, and `*.spec.ts(x)`) are excluded from
 production scoring by default. Set `includeTests` to `true` to audit the
 combined production-and-test dependency graph.
 
+Generated sources remain in static dependency analysis because they can encode
+real wiring, but files with standard `Code generated ... DO NOT EDIT.` or
+`@generated` headers are excluded from Git locality and discovery co-change by
+default. Set `includeGeneratedHistory` (or discover's
+`-include-generated-history`) to opt in.
+
 Discovery raises its maximum cluster count when necessary to fit all source
 units within `max-boundary-size`; disable this with `-auto-scale=false`.
 
@@ -191,8 +197,9 @@ score. Every violation includes its source file, line, import and module pair.
 - Go internal imports are resolved from the root `go.mod` module path.
 - TypeScript relative imports are resolved. `tsconfig.json` path aliases and
   package workspace aliases are not yet resolved.
-- Tests are excluded by default. Generated code and other repository-specific
-  sources should be excluded explicitly when they should not affect the score.
+- Tests are excluded by default. Generated code remains in static analysis but
+  is excluded from history evidence; other repository-specific sources should
+  be excluded explicitly when they should not affect the score.
 - Build archscore with the latest stable Go release. Syntax unsupported by the
   build toolchain is reported as an analysis error rather than approximated.
 - Export counting measures declarations, not the full type-level API surface
