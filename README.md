@@ -56,6 +56,9 @@ directly inside its package directories. This avoids turning a parent package
 such as `internal` into `internal/**` and accidentally absorbing every child
 package.
 
+Analysis fails when a source file matches more than one declared module. Module
+order is never used to silently resolve an ambiguous boundary.
+
 Modules can declare architecture roles and local coupling thresholds. A
 `composition-root` is not penalized for fan-out because wiring dependencies is
 its responsibility:
@@ -156,6 +159,8 @@ visible in the violation list but does not multiply the architectural breadth
 of the violation.
 
 Public-contract scoring only considers modules declaring `publicPaths`.
+Contract paths that match no analyzed files are warned about and excluded from
+evidence rather than receiving a perfect score.
 Cohesion excludes single-package or edge-free modules and weights the remaining
 modules by dependency edges. Change locality only scores modules with enough
 history and weights their result by the number of observed changes, so a module

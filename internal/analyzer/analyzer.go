@@ -86,7 +86,10 @@ func collect(root string, cfg Config) (map[string]*sourceFile, string, error) {
 		if ext != ".go" && ext != ".ts" && ext != ".tsx" && ext != ".mts" && ext != ".cts" {
 			return nil
 		}
-		mod := assignModule(rel, cfg.Modules)
+		mod, matches := assignModule(rel, cfg.Modules)
+		if len(matches) > 1 {
+			return fmt.Errorf("%s matches multiple modules: %s", rel, strings.Join(matches, ", "))
+		}
 		imps, err := parseImports(p, ext)
 		if err != nil {
 			return fmt.Errorf("%s: %w", rel, err)
@@ -293,15 +296,20 @@ func resolveTS(files map[string]*sourceFile, base string) string {
 	return ""
 }
 
-func assignModule(path string, modules []ModuleConfig) string {
+func assignModule(path string, modules []ModuleConfig) (string, []string) {
+	var matches []string
 	for _, m := range modules {
 		for _, pattern := range m.Paths {
 			if glob(pattern, path) {
-				return m.Name
+				matches = append(matches, m.Name)
+				break
 			}
 		}
 	}
-	return ""
+	if len(matches) == 0 {
+		return "", nil
+	}
+	return matches[0], matches
 }
 
 func excluded(path string, patterns []string) bool {
@@ -439,6 +447,9 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		if len(moduleCfg.PublicPaths) == 0 {
 			continue
 		}
+		if module.PublicFiles == 0 {
+			continue
+		}
 		publicConfigured++
 		limit := 20
 		if moduleCfg.MaxPublicSymbols != nil {
@@ -553,6 +564,9 @@ func moduleReports(files map[string]*sourceFile, edges []edge, cfg Config) []Mod
 			}
 		}
 		r.PublicUnits = len(publicUnits)
+		if len(c.PublicPaths) > 0 && r.PublicFiles == 0 {
+			r.Warnings = append(r.Warnings, "public paths match no analyzed source files; contract not evaluated")
+		}
 		r.FanIn, r.FanOut = len(in[c.Name]), len(out[c.Name])
 		if c.Role == "composition-root" && r.FanIn > 0 {
 			r.Warnings = append(r.Warnings, fmt.Sprintf("composition root has %d inbound module dependencies; split reusable code from wiring", r.FanIn))
