@@ -286,6 +286,23 @@ func TestObservedScoreWeightsPartialEvidence(t *testing.T) {
 	}
 }
 
+func TestUnassignedFilesReduceStructuralConfidence(t *testing.T) {
+	report := Report{
+		Files: 10, AnalysisCoverage: .5,
+		Components: []ComponentScore{
+			{Name: "acyclicity", Score: 20, Max: 20, Confidence: 1},
+			{Name: "module-coverage", Score: 5, Max: 10, Confidence: 1},
+		},
+	}
+	finalizeScores(&report)
+	if report.Components[0].Confidence != .5 || report.Components[0].EvaluatedPoints != 10 {
+		t.Fatalf("structural confidence ignored source coverage: %#v", report)
+	}
+	if report.Components[1].Confidence != 1 {
+		t.Fatalf("coverage confidence must remain directly evaluable: %#v", report)
+	}
+}
+
 func TestAcyclicityScoresAffectedModuleRatio(t *testing.T) {
 	modules := []ModuleConfig{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "d"}}
 	files := map[string]*sourceFile{}

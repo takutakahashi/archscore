@@ -153,6 +153,11 @@ denominator. `nominalScore` retains the unnormalized sum for diagnostics,
 `confidence` is `evaluatedPoints / 100`. Each component reports the same
 information.
 
+`analysisCoverage` is the exact share of source files assigned to modules. It
+scales the confidence of every structural component, because dependencies in
+unassigned code cannot support conclusions about boundaries, cycles, coupling,
+cohesion, contracts, or change locality.
+
 Boundary compliance is scored by the share of observed directed module pairs
 that violate policy. Repeating the same forbidden import in many files remains
 visible in the violation list but does not multiply the architectural breadth
