@@ -441,8 +441,9 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	if len(files) > 0 {
 		coverage = int(math.Round(10 * float64(len(files)-len(r.Unknown)) / float64(len(files))))
 	}
-	publicTotal, publicConfigured := 0, 0
+	publicWeightedScore, publicConfigured, publicCoveredWeight, publicTotalWeight := 0, 0, 0, 0
 	for _, module := range r.Modules {
+		publicTotalWeight += module.FanIn
 		moduleCfg := findModuleConfig(cfg.Modules, module.Name)
 		if len(moduleCfg.PublicPaths) == 0 {
 			continue
@@ -451,21 +452,25 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 			continue
 		}
 		publicConfigured++
+		if module.FanIn == 0 {
+			continue
+		}
+		publicCoveredWeight += module.FanIn
 		limit := 20
 		if moduleCfg.MaxPublicSymbols != nil {
 			limit = *moduleCfg.MaxPublicSymbols
 		}
 		if limit >= 0 && module.PublicSymbols > limit {
-			publicTotal += maxInt(0, 10-int(math.Ceil(float64(module.PublicSymbols-limit)/5))*2)
+			publicWeightedScore += module.FanIn * maxInt(0, 10-int(math.Ceil(float64(module.PublicSymbols-limit)/5))*2)
 		} else {
-			publicTotal += 10
+			publicWeightedScore += module.FanIn * 10
 		}
 	}
 	publicScore := 10
-	if publicConfigured > 0 {
-		publicScore = int(math.Round(float64(publicTotal) / float64(publicConfigured)))
+	if publicCoveredWeight > 0 {
+		publicScore = int(math.Round(float64(publicWeightedScore) / float64(publicCoveredWeight)))
 	}
-	publicConfidence := float64(publicConfigured) / float64(maxInt(1, len(r.Modules)))
+	publicConfidence := float64(publicCoveredWeight) / float64(maxInt(1, publicTotalWeight))
 	boundaryConfidence := 1.0
 	if cfg.PolicyMode == "observational" {
 		boundaryConfidence = 0
@@ -473,7 +478,7 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	r.Components = []ComponentScore{
 		{"boundaries", boundary, 30, fmt.Sprintf("%d/%d observed dependency pairs violate policy across %d import edges; policy mode %s", len(violatingPairs), len(dependencyPairs), len(r.Violations), effectivePolicyMode(cfg.PolicyMode)), boundaryConfidence, 0},
 		{"acyclicity", cycles, 20, fmt.Sprintf("%d/%d active modules participate in %d strongly connected components", len(cyclicModules), activeModules, len(r.Cycles)), 1, 0},
-		{"public-contract", publicScore, 10, fmt.Sprintf("%d/%d modules declare public paths", publicConfigured, len(r.Modules)), round(publicConfidence), 0},
+		{"public-contract", publicScore, 10, fmt.Sprintf("%d modules declare non-empty public paths covering %d/%d inbound module relationships", publicConfigured, publicCoveredWeight, publicTotalWeight), round(publicConfidence), 0},
 		{"coupling", coupling, 15, fmt.Sprintf("%d/%d modules exceed fan-out %d; %d/%d exceed stability-weighted load %.1f; composition roots exempt", rawOver, eligible, cfg.MaxFanOut, loadOver, eligible, cfg.MaxCouplingLoad), 1, 0},
 		{"cohesion", cohesion, 10, fmt.Sprintf("%d/%d dependency-edge weight is evaluable; single-package modules excluded", cohesionWeight, totalCohesionWeight), round(cohesionConfidence), 0},
 		{"module-coverage", coverage, 10, fmt.Sprintf("%d unassigned files", len(r.Unknown)), 1, 0},
