@@ -81,10 +81,13 @@ production scoring by default. Set `includeTests` to `true` to audit the
 combined production-and-test dependency graph.
 
 Discovery raises its maximum cluster count when necessary to fit all source
-units within `max-boundary-size`; disable this with `-auto-scale=false`. The
-default fan-out threshold grows with the square root of the module count, and
-coupling is scored by the proportion of modules above that threshold. A
-module-level `maxFanOut` remains an explicit, non-scaled override.
+units within `max-boundary-size`; disable this with `-auto-scale=false`.
+
+Coupling combines raw fan-out (direct dependency count and cognitive load) with
+`couplingLoad`, the sum of target-module instability. Depending on stable,
+widely reused platform modules is therefore distinguished from depending on
+many volatile feature modules. Configure the defaults with `maxFanOut` and
+`maxCouplingLoad`; either can be overridden per module.
 
 A `composition-root` with inbound module dependencies receives a warning. This
 usually means reusable code and application wiring share a declared boundary.
@@ -125,7 +128,7 @@ after upgrading to the evidence-normalized version 2 scoring model.
 | Boundaries | 30 | forbidden and private dependency edges |
 | Acyclicity | 20 | strongly connected module components |
 | Public contract | 10 | exported symbols under declared public paths |
-| Coupling | 15 | module fan-out above `maxFanOut` |
+| Coupling | 15 | raw fan-out and stability-weighted coupling load |
 | Cohesion | 10 | internal / all resolved module edges |
 | Module coverage | 10 | source files assigned to a module |
 | Change locality | 5 | commits whose analyzed changes are at least 80% contained |

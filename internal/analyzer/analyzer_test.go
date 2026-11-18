@@ -248,6 +248,22 @@ func TestSinglePackageModuleHasNeutralCohesion(t *testing.T) {
 	}
 }
 
+func TestCouplingLoadUsesTargetInstability(t *testing.T) {
+	files := map[string]*sourceFile{
+		"a/a.go": {Path: "a/a.go", Module: "a"},
+		"b/b.go": {Path: "b/b.go", Module: "b"},
+		"c/c.go": {Path: "c/c.go", Module: "c"},
+	}
+	edges := []edge{
+		{FromModule: "a", ToModule: "b"},
+		{FromModule: "b", ToModule: "c"},
+	}
+	reports := moduleReports(files, edges, Config{Modules: []ModuleConfig{{Name: "a"}, {Name: "b"}, {Name: "c"}}})
+	if reports[0].CouplingLoad != .5 || reports[1].CouplingLoad != 0 {
+		t.Fatalf("unexpected stability-weighted load: %#v", reports)
+	}
+}
+
 func TestObservedScoreExcludesUnevaluatedPoints(t *testing.T) {
 	report := Report{Components: []ComponentScore{
 		{Name: "known-good", Score: 30, Max: 30, Confidence: 1},
