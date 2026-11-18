@@ -130,6 +130,11 @@ after upgrading to the evidence-normalized version 2 scoring model.
 | Module coverage | 10 | source files assigned to a module |
 | Change locality | 5 | commits whose analyzed changes are at least 80% contained |
 
+Acyclicity is proportional to the share of active modules outside strongly
+connected components. A cycle spanning many modules therefore costs more than
+a small local cycle, regardless of how many strongly connected components are
+present.
+
 Reports use scoring model version 2. `score` is normalized over evaluable
 points only, so missing evidence is removed from both the numerator and the
 denominator. `nominalScore` retains the unnormalized sum for diagnostics,
