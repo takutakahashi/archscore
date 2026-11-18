@@ -342,6 +342,7 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 		}
 	}
 	r.Cycles = moduleCycles(edges)
+	r.CycleDiagnostics = diagnoseCycles(r.Cycles, edges, cfg.Modules)
 	if len(r.Violations) > 0 || len(r.Cycles) > 0 {
 		r.Gate = "fail"
 	}
@@ -599,6 +600,71 @@ func moduleCycles(edges []edge) [][]string {
 	}
 	sort.Slice(cycles, func(i, j int) bool { return strings.Join(cycles[i], ",") < strings.Join(cycles[j], ",") })
 	return cycles
+}
+
+func diagnoseCycles(cycles [][]string, edges []edge, configs []ModuleConfig) []CycleDiagnostic {
+	diagnostics := make([]CycleDiagnostic, 0, len(cycles))
+	for _, cycle := range cycles {
+		members := map[string]bool{}
+		for _, module := range cycle {
+			members[module] = true
+		}
+		pairs := map[string]bool{}
+		in, out := map[string]map[string]bool{}, map[string]map[string]bool{}
+		var induced []edge
+		for _, dependency := range edges {
+			if dependency.FromModule == dependency.ToModule || !members[dependency.FromModule] || !members[dependency.ToModule] {
+				continue
+			}
+			key := directedKey(dependency.FromModule, dependency.ToModule)
+			if pairs[key] {
+				continue
+			}
+			pairs[key] = true
+			induced = append(induced, dependency)
+			if out[dependency.FromModule] == nil {
+				out[dependency.FromModule] = map[string]bool{}
+			}
+			if in[dependency.ToModule] == nil {
+				in[dependency.ToModule] = map[string]bool{}
+			}
+			out[dependency.FromModule][dependency.ToModule] = true
+			in[dependency.ToModule][dependency.FromModule] = true
+		}
+		diagnostic := CycleDiagnostic{Modules: len(cycle), DependencyPairs: len(pairs)}
+		for _, candidate := range cycle {
+			filtered := make([]edge, 0, len(induced))
+			for _, dependency := range induced {
+				if dependency.FromModule != candidate && dependency.ToModule != candidate {
+					filtered = append(filtered, dependency)
+				}
+			}
+			remaining := 0
+			for _, residual := range moduleCycles(filtered) {
+				remaining = maxInt(remaining, len(residual))
+			}
+			config := findModuleConfig(configs, candidate)
+			diagnostic.BreakCandidates = append(diagnostic.BreakCandidates, CycleBreakCandidate{
+				Module: candidate, Role: config.Role, Inbound: len(in[candidate]), Outbound: len(out[candidate]),
+				RemainingCycleModules: remaining, Reduction: len(cycle) - remaining,
+			})
+		}
+		sort.Slice(diagnostic.BreakCandidates, func(i, j int) bool {
+			a, b := diagnostic.BreakCandidates[i], diagnostic.BreakCandidates[j]
+			if a.Reduction != b.Reduction {
+				return a.Reduction > b.Reduction
+			}
+			if a.Inbound+a.Outbound != b.Inbound+b.Outbound {
+				return a.Inbound+a.Outbound > b.Inbound+b.Outbound
+			}
+			return a.Module < b.Module
+		})
+		if len(diagnostic.BreakCandidates) > 5 {
+			diagnostic.BreakCandidates = diagnostic.BreakCandidates[:5]
+		}
+		diagnostics = append(diagnostics, diagnostic)
+	}
+	return diagnostics
 }
 
 func applyHistory(root string, files map[string]*sourceFile, cfg Config, report *Report) {

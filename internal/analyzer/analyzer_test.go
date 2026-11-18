@@ -257,6 +257,23 @@ func TestAcyclicityScoresAffectedModuleRatio(t *testing.T) {
 	}
 }
 
+func TestCycleDiagnosticsIdentifyStructuralHub(t *testing.T) {
+	modules := []ModuleConfig{{Name: "hub", Role: "composition-root"}, {Name: "b"}, {Name: "c"}}
+	edges := []edge{
+		{FromModule: "hub", ToModule: "b"}, {FromModule: "b", ToModule: "hub"},
+		{FromModule: "hub", ToModule: "c"}, {FromModule: "c", ToModule: "hub"},
+	}
+	cycles := moduleCycles(edges)
+	diagnostics := diagnoseCycles(cycles, edges, modules)
+	if len(diagnostics) != 1 || len(diagnostics[0].BreakCandidates) == 0 {
+		t.Fatalf("missing cycle diagnostics: %#v", diagnostics)
+	}
+	best := diagnostics[0].BreakCandidates[0]
+	if best.Module != "hub" || best.Role != "composition-root" || best.RemainingCycleModules != 0 || best.Reduction != 3 {
+		t.Fatalf("wrong cycle hub: %#v", best)
+	}
+}
+
 func TestObservationalPolicyExcludesBoundaryPoints(t *testing.T) {
 	files := map[string]*sourceFile{"a/a.go": {Path: "a/a.go", Module: "a"}}
 	report := buildReport(files, nil, Config{PolicyMode: "observational", Modules: []ModuleConfig{{Name: "a"}}})
