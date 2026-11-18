@@ -5,6 +5,7 @@
   "minCochange": 3,
   "minLocalityRatio": 0.8,
   "includeTests": false,
+  "policyMode": "enforced",
   "exclude": ["**/*.test.ts", "**/*_test.go", "**/generated/**"],
   "modules": [
     {

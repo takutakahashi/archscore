@@ -48,11 +48,7 @@ func Analyze(root string, cfg Config) (Report, error) {
 	edges := resolveEdges(files, modulePath)
 	report := buildReport(files, edges, cfg)
 	applyHistory(abs, files, cfg, &report)
-	weightedConfidence := 0.0
-	for _, component := range report.Components {
-		weightedConfidence += float64(component.Max) * component.Confidence
-	}
-	report.Confidence = round(weightedConfidence / 100)
+	finalizeScores(&report)
 	return report, nil
 }
 
@@ -324,7 +320,7 @@ func glob(pattern, value string) bool {
 }
 
 func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report {
-	r := Report{Version: "1", Files: len(files), Edges: len(edges), Gate: "pass"}
+	r := Report{Version: "2", Files: len(files), Edges: len(edges), Gate: "pass"}
 	allowed := map[string]map[string]bool{}
 	for _, m := range cfg.Modules {
 		allowed[m.Name] = map[string]bool{m.Name: true}
@@ -380,20 +376,27 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 	if eligible > 0 {
 		coupling = int(math.Round(15 * (1 - float64(over)/float64(eligible))))
 	}
-	cohesionAvg := 1.0
-	if len(r.Modules) > 0 {
-		cohesionAvg = 0
-		for _, m := range r.Modules {
-			cohesionAvg += m.Cohesion
+	cohesionWeighted, cohesionWeight, totalCohesionWeight := 0.0, 0, 0
+	for _, m := range r.Modules {
+		weight := m.InternalEdges + m.ExternalEdges
+		totalCohesionWeight += weight
+		if m.CohesionEvaluated {
+			cohesionWeighted += m.Cohesion * float64(weight)
+			cohesionWeight += weight
 		}
-		cohesionAvg /= float64(len(r.Modules))
 	}
-	cohesion := int(math.Round(10 * cohesionAvg))
+	cohesion, cohesionConfidence := 10, 0.0
+	if cohesionWeight > 0 {
+		cohesion = int(math.Round(10 * cohesionWeighted / float64(cohesionWeight)))
+	}
+	if totalCohesionWeight > 0 {
+		cohesionConfidence = float64(cohesionWeight) / float64(totalCohesionWeight)
+	}
 	coverage := 10
 	if len(files) > 0 {
 		coverage = int(math.Round(10 * float64(len(files)-len(r.Unknown)) / float64(len(files))))
 	}
-	publicScore, publicConfigured := 10, 0
+	publicTotal, publicConfigured := 0, 0
 	for _, module := range r.Modules {
 		moduleCfg := findModuleConfig(cfg.Modules, module.Name)
 		if len(moduleCfg.PublicPaths) == 0 {
@@ -405,23 +408,36 @@ func buildReport(files map[string]*sourceFile, edges []edge, cfg Config) Report 
 			limit = *moduleCfg.MaxPublicSymbols
 		}
 		if limit >= 0 && module.PublicSymbols > limit {
-			publicScore -= int(math.Ceil(float64(module.PublicSymbols-limit)/5)) * 2
+			publicTotal += maxInt(0, 10-int(math.Ceil(float64(module.PublicSymbols-limit)/5))*2)
+		} else {
+			publicTotal += 10
 		}
 	}
-	publicScore = maxInt(0, publicScore)
-	publicConfidence := float64(publicConfigured) / float64(maxInt(1, len(r.Modules)))
-	r.Components = []ComponentScore{
-		{"boundaries", boundary, 30, fmt.Sprintf("%d forbidden or private dependency edges", len(r.Violations)), 1},
-		{"acyclicity", cycles, 20, fmt.Sprintf("%d module cycles", len(r.Cycles)), 1},
-		{"public-contract", publicScore, 10, fmt.Sprintf("%d/%d modules declare public paths", publicConfigured, len(r.Modules)), round(publicConfidence)},
-		{"coupling", coupling, 15, fmt.Sprintf("effective default fan-out threshold %d; %d/%d modules exceed it; composition roots exempt", maxInt(cfg.MaxFanOut, scaleThreshold), over, eligible), 1},
-		{"cohesion", cohesion, 10, "cross-package internal edge ratio; single-package modules are neutral", 1},
-		{"module-coverage", coverage, 10, fmt.Sprintf("%d unassigned files", len(r.Unknown)), 1},
+	publicScore := 10
+	if publicConfigured > 0 {
+		publicScore = int(math.Round(float64(publicTotal) / float64(publicConfigured)))
 	}
-	for _, c := range r.Components {
-		r.Score += c.Score
+	publicConfidence := float64(publicConfigured) / float64(maxInt(1, len(r.Modules)))
+	boundaryConfidence := 1.0
+	if cfg.PolicyMode == "observational" {
+		boundaryConfidence = 0
+	}
+	r.Components = []ComponentScore{
+		{"boundaries", boundary, 30, fmt.Sprintf("%d forbidden or private dependency edges; policy mode %s", len(r.Violations), effectivePolicyMode(cfg.PolicyMode)), boundaryConfidence, 0},
+		{"acyclicity", cycles, 20, fmt.Sprintf("%d module cycles", len(r.Cycles)), 1, 0},
+		{"public-contract", publicScore, 10, fmt.Sprintf("%d/%d modules declare public paths", publicConfigured, len(r.Modules)), round(publicConfidence), 0},
+		{"coupling", coupling, 15, fmt.Sprintf("effective default fan-out threshold %d; %d/%d modules exceed it; composition roots exempt", maxInt(cfg.MaxFanOut, scaleThreshold), over, eligible), 1, 0},
+		{"cohesion", cohesion, 10, fmt.Sprintf("%d/%d dependency-edge weight is evaluable; single-package modules excluded", cohesionWeight, totalCohesionWeight), round(cohesionConfidence), 0},
+		{"module-coverage", coverage, 10, fmt.Sprintf("%d unassigned files", len(r.Unknown)), 1, 0},
 	}
 	return r
+}
+
+func effectivePolicyMode(mode string) string {
+	if mode == "" {
+		return "enforced"
+	}
+	return mode
 }
 
 func matchesAny(path string, patterns []string) bool {
@@ -511,6 +527,7 @@ func moduleReports(files map[string]*sourceFile, edges []edge, cfg Config) []Mod
 		if r.Units <= 1 || total == 0 {
 			r.Cohesion = 1
 		} else {
+			r.CohesionEvaluated = true
 			r.Cohesion = round(float64(r.InternalEdges) / float64(total))
 		}
 		result = append(result, *r)
@@ -575,8 +592,7 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 	cmd.Args = append(cmd.Args, "--relative", "--", ".")
 	b, err := cmd.Output()
 	if err != nil {
-		report.Components = append(report.Components, ComponentScore{"change-locality", 5, 5, "git history unavailable; neutral score", 0})
-		report.Score += 5
+		report.Components = append(report.Components, ComponentScore{"change-locality", 5, 5, "git history unavailable; not evaluated", 0, 0})
 		report.Notes = append(report.Notes, "git history unavailable; change-coupling score omitted")
 		return
 	}
@@ -614,8 +630,7 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		}
 	}
 	if matchedCommits == 0 {
-		report.Components = append(report.Components, ComponentScore{"change-locality", 5, 5, "no matching git history; neutral score", 0})
-		report.Score += 5
+		report.Components = append(report.Components, ComponentScore{"change-locality", 5, 5, "no matching git history; not evaluated", 0, 0})
 		report.Notes = append(report.Notes, "no analyzed source files were found in git history; change-coupling score omitted")
 		return
 	}
@@ -651,10 +666,31 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 			totalPenalty++
 		}
 	}
-	score := maxInt(0, 5-totalPenalty)
+	score := 5
+	if evaluated > 0 {
+		score = int(math.Round(5 * float64(evaluated-totalPenalty) / float64(evaluated)))
+	}
 	confidence := float64(evaluated) / float64(maxInt(1, len(report.Modules)))
-	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("evaluated %d/%d modules; target %.0f%% contained changes", evaluated, len(report.Modules), cfg.MinLocalityRatio*100), round(confidence)})
-	report.Score += score
+	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("evaluated %d/%d modules; target %.0f%% contained changes", evaluated, len(report.Modules), cfg.MinLocalityRatio*100), round(confidence), 0})
+}
+
+func finalizeScores(report *Report) {
+	earned, evaluated := 0.0, 0.0
+	report.NominalScore = 0
+	for i := range report.Components {
+		component := &report.Components[i]
+		component.EvaluatedPoints = round(float64(component.Max) * component.Confidence)
+		evaluated += component.EvaluatedPoints
+		earned += float64(component.Score) * component.Confidence
+		report.NominalScore += component.Score
+	}
+	report.EvaluatedPoints = round(evaluated)
+	report.Confidence = round(evaluated / 100)
+	if evaluated == 0 {
+		report.Score = 0
+		return
+	}
+	report.Score = int(math.Round(100 * earned / evaluated))
 }
 
 func round(v float64) float64 { return math.Round(v*1000) / 1000 }

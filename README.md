@@ -115,6 +115,9 @@ archscore compare \
   -fail-on-regression
 ```
 
+Baselines must use the same report version. Regenerate version 1 baselines
+after upgrading to the evidence-normalized version 2 scoring model.
+
 ## Scoring (100 points)
 
 | Component | Points | Deterministic input |
@@ -127,9 +130,21 @@ archscore compare \
 | Module coverage | 10 | source files assigned to a module |
 | Change locality | 5 | commits whose analyzed changes are at least 80% contained |
 
-The top-level `confidence` is the point-weighted fraction of evidence that was
-actually evaluable. Each component also reports its own confidence. A neutral
-score with low confidence means “insufficient evidence,” not “known good.”
+Reports use scoring model version 2. `score` is normalized over evaluable
+points only, so missing evidence is removed from both the numerator and the
+denominator. `nominalScore` retains the unnormalized sum for diagnostics,
+`evaluatedPoints` shows how many of the 100 possible points had evidence, and
+`confidence` is `evaluatedPoints / 100`. Each component reports the same
+information.
+
+Public-contract scoring only considers modules declaring `publicPaths`.
+Cohesion excludes single-package or edge-free modules and weights the remaining
+modules by dependency edges. Change locality only scores modules with enough
+history.
+
+Use `"policyMode": "observational"` for exploratory configurations that allow
+dependencies broadly. Violations and cycles are still reported, but boundary
+points are excluded from the observed score. The default is `enforced`.
 
 Boundary violations and cycles fail the gate independently of the numeric
 score. Every violation includes its source file, line, import and module pair.

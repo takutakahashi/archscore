@@ -214,6 +214,40 @@ func TestSinglePackageModuleHasNeutralCohesion(t *testing.T) {
 	if reports[0].Units != 1 || reports[0].Cohesion != 1 {
 		t.Fatalf("single Go package should be neutral: %#v", reports[0])
 	}
+	if reports[0].CohesionEvaluated {
+		t.Fatalf("single Go package must not count as cohesion evidence: %#v", reports[0])
+	}
+}
+
+func TestObservedScoreExcludesUnevaluatedPoints(t *testing.T) {
+	report := Report{Components: []ComponentScore{
+		{Name: "known-good", Score: 30, Max: 30, Confidence: 1},
+		{Name: "unknown", Score: 70, Max: 70, Confidence: 0},
+	}}
+	finalizeScores(&report)
+	if report.Score != 100 || report.NominalScore != 100 || report.EvaluatedPoints != 30 || report.Confidence != .3 {
+		t.Fatalf("unexpected evidence-normalized score: %#v", report)
+	}
+}
+
+func TestObservedScoreWeightsPartialEvidence(t *testing.T) {
+	report := Report{Components: []ComponentScore{
+		{Name: "good", Score: 10, Max: 10, Confidence: 1},
+		{Name: "partial-bad", Score: 0, Max: 10, Confidence: .5},
+	}}
+	finalizeScores(&report)
+	if report.Score != 67 || report.EvaluatedPoints != 15 || report.Confidence != .15 {
+		t.Fatalf("unexpected partial-evidence score: %#v", report)
+	}
+}
+
+func TestObservationalPolicyExcludesBoundaryPoints(t *testing.T) {
+	files := map[string]*sourceFile{"a/a.go": {Path: "a/a.go", Module: "a"}}
+	report := buildReport(files, nil, Config{PolicyMode: "observational", Modules: []ModuleConfig{{Name: "a"}}})
+	finalizeScores(&report)
+	if report.Components[0].Confidence != 0 || report.Components[0].EvaluatedPoints != 0 {
+		t.Fatalf("observational policy counted as enforcement evidence: %#v", report.Components[0])
+	}
 }
 
 func TestDiscoverRespectsBoundaryFileLimit(t *testing.T) {
@@ -284,6 +318,13 @@ func TestCompareReportsDetectsArchitectureRegressions(t *testing.T) {
 	comparison := CompareReports(baseline, current)
 	if comparison.Passed || len(comparison.Regressions) != 6 {
 		t.Fatalf("unexpected comparison: %#v", comparison)
+	}
+}
+
+func TestCompareReportsRejectsDifferentScoringVersions(t *testing.T) {
+	result := CompareReports(Report{Version: "1", Score: 90}, Report{Version: "2", Score: 90})
+	if result.Passed || len(result.Regressions) != 1 || result.Regressions[0].Kind != "report-version" {
+		t.Fatalf("version mismatch was not rejected: %#v", result)
 	}
 }
 

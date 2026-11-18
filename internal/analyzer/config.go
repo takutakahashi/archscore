@@ -33,6 +33,12 @@ func LoadConfig(path string) (Config, error) {
 	if cfg.MinLocalityRatio <= 0 {
 		cfg.MinLocalityRatio = 0.8
 	}
+	if cfg.PolicyMode == "" {
+		cfg.PolicyMode = "enforced"
+	}
+	if cfg.PolicyMode != "enforced" && cfg.PolicyMode != "observational" {
+		return Config{}, fmt.Errorf("policyMode must be enforced or observational")
+	}
 	seen := map[string]bool{}
 	for _, m := range cfg.Modules {
 		if m.Name == "" || len(m.Paths) == 0 {
