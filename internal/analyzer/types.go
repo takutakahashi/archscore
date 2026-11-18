@@ -23,20 +23,36 @@ type ModuleConfig struct {
 }
 
 type Report struct {
-	Version         string           `json:"version"`
-	Score           int              `json:"score"`
-	NominalScore    int              `json:"nominalScore"`
-	EvaluatedPoints float64          `json:"evaluatedPoints"`
-	Confidence      float64          `json:"confidence"`
-	Gate            string           `json:"gate"`
-	Files           int              `json:"files"`
-	Edges           int              `json:"edges"`
-	Components      []ComponentScore `json:"components"`
-	Violations      []Violation      `json:"violations"`
-	Cycles          [][]string       `json:"cycles"`
-	Modules         []ModuleReport   `json:"modules"`
-	Unknown         []string         `json:"unassignedFiles,omitempty"`
-	Notes           []string         `json:"notes,omitempty"`
+	Version          string            `json:"version"`
+	Score            int               `json:"score"`
+	NominalScore     int               `json:"nominalScore"`
+	EvaluatedPoints  float64           `json:"evaluatedPoints"`
+	Confidence       float64           `json:"confidence"`
+	Gate             string            `json:"gate"`
+	Files            int               `json:"files"`
+	Edges            int               `json:"edges"`
+	Components       []ComponentScore  `json:"components"`
+	Violations       []Violation       `json:"violations"`
+	Cycles           [][]string        `json:"cycles"`
+	CycleDiagnostics []CycleDiagnostic `json:"cycleDiagnostics,omitempty"`
+	Modules          []ModuleReport    `json:"modules"`
+	Unknown          []string          `json:"unassignedFiles,omitempty"`
+	Notes            []string          `json:"notes,omitempty"`
+}
+
+type CycleDiagnostic struct {
+	Modules         int                   `json:"modules"`
+	DependencyPairs int                   `json:"dependencyPairs"`
+	BreakCandidates []CycleBreakCandidate `json:"breakCandidates,omitempty"`
+}
+
+type CycleBreakCandidate struct {
+	Module                string `json:"module"`
+	Role                  string `json:"role,omitempty"`
+	Inbound               int    `json:"inbound"`
+	Outbound              int    `json:"outbound"`
+	RemainingCycleModules int    `json:"remainingCycleModules"`
+	Reduction             int    `json:"reduction"`
 }
 
 type ComponentScore struct {

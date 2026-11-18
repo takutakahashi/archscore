@@ -135,6 +135,11 @@ connected components. A cycle spanning many modules therefore costs more than
 a small local cycle, regardless of how many strongly connected components are
 present.
 
+For every cycle, `cycleDiagnostics` ranks up to five break candidates. Each
+candidate shows its inbound/outbound dependency pairs and the largest cycle
+that would remain if that boundary were split out. This is a diagnosis aid,
+not an instruction to delete the module.
+
 Reports use scoring model version 2. `score` is normalized over evaluable
 points only, so missing evidence is removed from both the numerator and the
 denominator. `nominalScore` retains the unnormalized sum for diagnostics,
