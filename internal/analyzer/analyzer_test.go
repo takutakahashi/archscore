@@ -273,6 +273,9 @@ func TestObservedScoreExcludesUnevaluatedPoints(t *testing.T) {
 	if report.Score != 100 || report.NominalScore != 100 || report.EvaluatedPoints != 30 || report.Confidence != .3 {
 		t.Fatalf("unexpected evidence-normalized score: %#v", report)
 	}
+	if report.ScoreLowerBound != 30 || report.ScoreUpperBound != 100 {
+		t.Fatalf("unexpected uncertainty bounds: %#v", report)
+	}
 }
 
 func TestObservedScoreWeightsPartialEvidence(t *testing.T) {
@@ -283,6 +286,9 @@ func TestObservedScoreWeightsPartialEvidence(t *testing.T) {
 	finalizeScores(&report)
 	if report.Score != 67 || report.EvaluatedPoints != 15 || report.Confidence != .15 {
 		t.Fatalf("unexpected partial-evidence score: %#v", report)
+	}
+	if report.ScoreLowerBound != 10 || report.ScoreUpperBound != 95 {
+		t.Fatalf("unexpected partial-evidence bounds: %#v", report)
 	}
 }
 

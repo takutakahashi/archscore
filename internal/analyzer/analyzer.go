@@ -826,6 +826,8 @@ func finalizeScores(report *Report) {
 	}
 	report.EvaluatedPoints = round(evaluated)
 	report.Confidence = round(evaluated / 100)
+	report.ScoreLowerBound = int(math.Round(earned))
+	report.ScoreUpperBound = int(math.Round(earned + maxFloat(0, 100-evaluated)))
 	if evaluated == 0 {
 		report.Score = 0
 		return
@@ -842,6 +844,13 @@ func maxInt(a, b int) int {
 }
 func minInt(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxFloat(a, b float64) float64 {
+	if a > b {
 		return a
 	}
 	return b
