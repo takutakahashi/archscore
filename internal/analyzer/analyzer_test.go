@@ -409,6 +409,31 @@ func TestPublicContractRejectsPrivateImportsAndCountsExports(t *testing.T) {
 	if report.Components[2].Name != "public-contract" || report.Components[2].Score != 8 {
 		t.Fatalf("public contract score: %#v", report.Components[2])
 	}
+	if report.Components[2].Confidence != 1 {
+		t.Fatalf("the only consumed contract should provide full evidence: %#v", report.Components[2])
+	}
+}
+
+func TestPublicContractEvidenceIsWeightedByInboundBoundaries(t *testing.T) {
+	limit := 20
+	modules := []ModuleConfig{
+		{Name: "platform", PublicPaths: []string{"platform/api/**"}, MaxPublicSymbols: &limit},
+		{Name: "unused"}, {Name: "a"}, {Name: "b"},
+	}
+	files := map[string]*sourceFile{
+		"platform/api/api.go": {Path: "platform/api/api.go", Module: "platform"},
+		"unused/u.go":         {Path: "unused/u.go", Module: "unused"},
+		"a/a.go":              {Path: "a/a.go", Module: "a"},
+		"b/b.go":              {Path: "b/b.go", Module: "b"},
+	}
+	edges := []edge{
+		{FromModule: "a", ToModule: "platform", ToFile: "platform/api/api.go"},
+		{FromModule: "b", ToModule: "platform", ToFile: "platform/api/api.go"},
+	}
+	report := buildReport(files, edges, Config{Modules: modules})
+	if report.Components[2].Confidence != 1 {
+		t.Fatalf("unused modules diluted contract evidence: %#v", report.Components[2])
+	}
 }
 
 func TestCompareReportsDetectsArchitectureRegressions(t *testing.T) {

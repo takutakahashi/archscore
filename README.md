@@ -161,6 +161,9 @@ of the violation.
 Public-contract scoring only considers modules declaring `publicPaths`.
 Contract paths that match no analyzed files are warned about and excluded from
 evidence rather than receiving a perfect score.
+Contract confidence and surface-area scores are weighted by distinct inbound
+module relationships. Unused leaf modules therefore do not dilute evidence for
+contracts that actually mediate dependencies.
 Cohesion excludes single-package or edge-free modules and weights the remaining
 modules by dependency edges. Change locality only scores modules with enough
 history and weights their result by the number of observed changes, so a module
