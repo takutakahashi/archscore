@@ -399,6 +399,7 @@ func moduleCycles(edges []edge) [][]string {
 
 func applyHistory(root string, files map[string]*sourceFile, cfg Config, report *Report) {
 	cmd := exec.Command("git", "-C", root, "log", "-n", strconv.Itoa(cfg.HistoryCommits), "--name-only", "--pretty=format:__COMMIT__")
+	cmd.Args = append(cmd.Args, "--relative", "--", ".")
 	b, err := cmd.Output()
 	if err != nil {
 		report.Components = append(report.Components, ComponentScore{"change-locality", 0, 5, "git history unavailable"})
@@ -406,6 +407,7 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		return
 	}
 	counts, pairs := map[string]int{}, map[string]map[string]int{}
+	matchedCommits := 0
 	for _, block := range strings.Split(string(b), "__COMMIT__") {
 		mods := map[string]bool{}
 		s := bufio.NewScanner(strings.NewReader(block))
@@ -414,6 +416,9 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 			if f := files[p]; f != nil && f.Module != "" {
 				mods[f.Module] = true
 			}
+		}
+		if len(mods) > 0 {
+			matchedCommits++
 		}
 		for a := range mods {
 			counts[a]++
@@ -426,6 +431,11 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 				}
 			}
 		}
+	}
+	if matchedCommits == 0 {
+		report.Components = append(report.Components, ComponentScore{"change-locality", 0, 5, "no matching git history"})
+		report.Notes = append(report.Notes, "no analyzed source files were found in git history; change-coupling score omitted")
+		return
 	}
 	totalPenalty := 0
 	for i := range report.Modules {
@@ -449,7 +459,7 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		}
 	}
 	score := maxInt(0, 5-totalPenalty)
-	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("analyzed up to %d commits", cfg.HistoryCommits)})
+	report.Components = append(report.Components, ComponentScore{"change-locality", score, 5, fmt.Sprintf("analyzed %d matching commits (up to %d)", matchedCommits, cfg.HistoryCommits)})
 	report.Score += score
 }
 

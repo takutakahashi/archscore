@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -36,6 +37,36 @@ func TestAnalyzeGoAndTypeScript(t *testing.T) {
 	}
 	if r.Gate != "fail" {
 		t.Fatalf("gate=%s", r.Gate)
+	}
+}
+
+func TestHistoryFromRepositorySubdirectory(t *testing.T) {
+	repo := t.TempDir()
+	root := filepath.Join(repo, "backend")
+	write(t, root, "go.mod", "module example.test/app\n")
+	write(t, root, "a/a.go", "package a\n")
+	write(t, root, "b/b.go", "package b\n")
+	runGit(t, repo, "init")
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "both")
+	write(t, root, "a/a.go", "package a\n// changed\n")
+	runGit(t, repo, "add", ".")
+	runGit(t, repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "a only")
+
+	cfg := Config{HistoryCommits: 10, Modules: []ModuleConfig{
+		{Name: "a", Paths: []string{"a/**"}},
+		{Name: "b", Paths: []string{"b/**"}},
+	}}
+	r, err := Analyze(root, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Modules[0].ChangePartners) != 1 || r.Modules[0].ChangePartners[0] != "b" {
+		t.Fatalf("subdirectory history was not matched: %#v", r.Modules)
+	}
+	last := r.Components[len(r.Components)-1]
+	if last.Name != "change-locality" || last.Detail != "analyzed 2 matching commits (up to 10)" {
+		t.Fatalf("unexpected history component: %#v", last)
 	}
 }
 
@@ -76,5 +107,13 @@ func write(t *testing.T, root, name, body string) {
 	}
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
