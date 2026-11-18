@@ -17,8 +17,9 @@ import (
 )
 
 var (
-	tsImport = regexp.MustCompile(`(?m)(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?["']([^"']+)["']|require\s*\(\s*["']([^"']+)["']\s*\)|import\s*\(\s*["']([^"']+)["']\s*\)`)
-	goModule = regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
+	tsImport        = regexp.MustCompile(`(?m)(?:import|export)\s+(?:[^;\n]*?\s+from\s+)?["']([^"']+)["']|require\s*\(\s*["']([^"']+)["']\s*\)|import\s*\(\s*["']([^"']+)["']\s*\)`)
+	goModule        = regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
+	generatedMarker = regexp.MustCompile(`(?m)^\s*(?://|/\*)\s*(?:Code generated .* DO NOT EDIT\.|@generated\b)`)
 )
 
 func Analyze(root string, cfg Config) (Report, error) {
@@ -50,6 +51,14 @@ func Analyze(root string, cfg Config) (Report, error) {
 	}
 	edges := resolveEdges(files, modulePath)
 	report := buildReport(files, edges, cfg)
+	for _, file := range files {
+		if file.Generated {
+			report.GeneratedFiles++
+			if !cfg.IncludeGeneratedHistory {
+				report.HistoryGeneratedExcluded++
+			}
+		}
+	}
 	applyHistory(abs, files, cfg, &report)
 	finalizeScores(&report)
 	return report, nil
@@ -98,10 +107,25 @@ func collect(root string, cfg Config) (map[string]*sourceFile, string, error) {
 		if err != nil {
 			return fmt.Errorf("%s exports: %w", rel, err)
 		}
-		files[rel] = &sourceFile{Path: rel, Module: mod, Imports: imps, Exports: exports}
+		generated, err := isGeneratedSource(p)
+		if err != nil {
+			return fmt.Errorf("%s generated marker: %w", rel, err)
+		}
+		files[rel] = &sourceFile{Path: rel, Module: mod, Imports: imps, Exports: exports, Generated: generated}
 		return nil
 	})
 	return files, modulePath, err
+}
+
+func isGeneratedSource(path string) (bool, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	if len(b) > 4096 {
+		b = b[:4096]
+	}
+	return generatedMarker.Match(b), nil
 }
 
 var tsExportDecl = regexp.MustCompile(`(?m)^\s*export\s+(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:class|function|const|let|var|interface|type|enum)\s+[A-Za-z_$][\w$]*`)
@@ -737,7 +761,7 @@ func applyHistory(root string, files map[string]*sourceFile, cfg Config, report 
 		s := bufio.NewScanner(strings.NewReader(block))
 		for s.Scan() {
 			p := filepath.ToSlash(strings.TrimSpace(s.Text()))
-			if f := files[p]; f != nil && f.Module != "" {
+			if f := files[p]; f != nil && f.Module != "" && (cfg.IncludeGeneratedHistory || !f.Generated) {
 				mods[f.Module] = true
 				touched[f.Module]++
 				totalFiles++

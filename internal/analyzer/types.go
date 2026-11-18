@@ -1,16 +1,17 @@
 package analyzer
 
 type Config struct {
-	Modules          []ModuleConfig `json:"modules"`
-	MaxFanOut        int            `json:"maxFanOut"`
-	MaxCouplingLoad  float64        `json:"maxCouplingLoad"`
-	HistoryCommits   int            `json:"historyCommits"`
-	MinModuleChanges int            `json:"minModuleChanges"`
-	MinCochange      int            `json:"minCochange"`
-	MinLocalityRatio float64        `json:"minLocalityRatio"`
-	Exclude          []string       `json:"exclude"`
-	IncludeTests     bool           `json:"includeTests,omitempty"`
-	PolicyMode       string         `json:"policyMode,omitempty"`
+	Modules                 []ModuleConfig `json:"modules"`
+	MaxFanOut               int            `json:"maxFanOut"`
+	MaxCouplingLoad         float64        `json:"maxCouplingLoad"`
+	HistoryCommits          int            `json:"historyCommits"`
+	MinModuleChanges        int            `json:"minModuleChanges"`
+	MinCochange             int            `json:"minCochange"`
+	MinLocalityRatio        float64        `json:"minLocalityRatio"`
+	Exclude                 []string       `json:"exclude"`
+	IncludeTests            bool           `json:"includeTests,omitempty"`
+	IncludeGeneratedHistory bool           `json:"includeGeneratedHistory,omitempty"`
+	PolicyMode              string         `json:"policyMode,omitempty"`
 }
 
 type ModuleConfig struct {
@@ -25,24 +26,26 @@ type ModuleConfig struct {
 }
 
 type Report struct {
-	Version          string            `json:"version"`
-	Score            int               `json:"score"`
-	ScoreLowerBound  int               `json:"scoreLowerBound"`
-	ScoreUpperBound  int               `json:"scoreUpperBound"`
-	NominalScore     int               `json:"nominalScore"`
-	EvaluatedPoints  float64           `json:"evaluatedPoints"`
-	Confidence       float64           `json:"confidence"`
-	AnalysisCoverage float64           `json:"analysisCoverage"`
-	Gate             string            `json:"gate"`
-	Files            int               `json:"files"`
-	Edges            int               `json:"edges"`
-	Components       []ComponentScore  `json:"components"`
-	Violations       []Violation       `json:"violations"`
-	Cycles           [][]string        `json:"cycles"`
-	CycleDiagnostics []CycleDiagnostic `json:"cycleDiagnostics,omitempty"`
-	Modules          []ModuleReport    `json:"modules"`
-	Unknown          []string          `json:"unassignedFiles,omitempty"`
-	Notes            []string          `json:"notes,omitempty"`
+	Version                  string            `json:"version"`
+	Score                    int               `json:"score"`
+	ScoreLowerBound          int               `json:"scoreLowerBound"`
+	ScoreUpperBound          int               `json:"scoreUpperBound"`
+	NominalScore             int               `json:"nominalScore"`
+	EvaluatedPoints          float64           `json:"evaluatedPoints"`
+	Confidence               float64           `json:"confidence"`
+	AnalysisCoverage         float64           `json:"analysisCoverage"`
+	Gate                     string            `json:"gate"`
+	Files                    int               `json:"files"`
+	GeneratedFiles           int               `json:"generatedFiles"`
+	HistoryGeneratedExcluded int               `json:"historyGeneratedExcluded"`
+	Edges                    int               `json:"edges"`
+	Components               []ComponentScore  `json:"components"`
+	Violations               []Violation       `json:"violations"`
+	Cycles                   [][]string        `json:"cycles"`
+	CycleDiagnostics         []CycleDiagnostic `json:"cycleDiagnostics,omitempty"`
+	Modules                  []ModuleReport    `json:"modules"`
+	Unknown                  []string          `json:"unassignedFiles,omitempty"`
+	Notes                    []string          `json:"notes,omitempty"`
 }
 
 type CycleDiagnostic struct {
@@ -106,10 +109,11 @@ type ModuleReport struct {
 }
 
 type sourceFile struct {
-	Path    string
-	Module  string
-	Imports []sourceImport
-	Exports int
+	Path      string
+	Module    string
+	Imports   []sourceImport
+	Exports   int
+	Generated bool
 }
 
 type sourceImport struct {
@@ -125,20 +129,22 @@ type edge struct {
 }
 
 type DiscoverConfig struct {
-	MinClusters      int      `json:"minClusters"`
-	MaxClusters      int      `json:"maxClusters"`
-	HistoryCommits   int      `json:"historyCommits"`
-	MinCochange      int      `json:"minCochange"`
-	MaxBoundarySize  int      `json:"maxBoundarySize"`
-	MaxBoundaryFiles int      `json:"maxBoundaryFiles"`
-	Exclude          []string `json:"exclude"`
-	DisableAutoScale bool     `json:"disableAutoScale"`
+	MinClusters             int      `json:"minClusters"`
+	MaxClusters             int      `json:"maxClusters"`
+	HistoryCommits          int      `json:"historyCommits"`
+	MinCochange             int      `json:"minCochange"`
+	MaxBoundarySize         int      `json:"maxBoundarySize"`
+	MaxBoundaryFiles        int      `json:"maxBoundaryFiles"`
+	Exclude                 []string `json:"exclude"`
+	DisableAutoScale        bool     `json:"disableAutoScale"`
+	IncludeGeneratedHistory bool     `json:"includeGeneratedHistory"`
 }
 
 type DiscoveryReport struct {
 	Version         string              `json:"version"`
 	Units           int                 `json:"units"`
 	Files           int                 `json:"files"`
+	GeneratedFiles  int                 `json:"generatedFiles"`
 	DependencyEdges int                 `json:"dependencyEdges"`
 	HistoryCommits  int                 `json:"historyCommits"`
 	Weights         DiscoveryWeights    `json:"weights"`
