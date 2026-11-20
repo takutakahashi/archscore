@@ -186,6 +186,206 @@
           <strong>archscore が決めたこと</strong>
           <p>100点の配分、各しきい値、証拠で正規化する計算法、違反と循環を数値スコアから独立してゲートする方針。</p>
         </aside>
+
+        <div class="reading-path">
+          <p>原典の名前だけでは設計判断に使えない。ここから先は、5本の論文が何を問題にし、いまのコードベースで何に見えるのかを読み解きます。</p>
+          <a href="#deep-dives">実務向けの読解ノートへ</a>
+        </div>
+      </section>
+
+      <section class="deep-dives" id="deep-dives" aria-labelledby="deep-dives-title">
+        <div class="deep-dives-intro">
+          <p class="section-index">Five papers, translated into engineering decisions</p>
+          <h2 id="deep-dives-title">原典を、設計判断まで<br />引き寄せて読む。</h2>
+          <p>ここでいう「翻訳」は、論文の結論を現代の技術スタックへそのまま当てはめることではありません。論文が観察した問題と、archscore が観測している信号の対応関係を明らかにすることです。</p>
+        </div>
+
+        <div class="reading-layout">
+          <nav class="paper-index" aria-label="原典の読解ノート">
+            <a href="#deep-parnas"><span>[1]</span> 変更から境界を決める</a>
+            <a href="#deep-structured"><span>[2]</span> 結合と凝集を読む</a>
+            <a href="#deep-reflexion"><span>[3]</span> 意図と実装の差を見る</a>
+            <a href="#deep-sarkar"><span>[4]</span> モジュール単位で測る</a>
+            <a href="#deep-gall"><span>[5]</span> 履歴から隠れた結合を見る</a>
+          </nav>
+
+          <div class="paper-notes">
+            <article class="paper-note" id="deep-parnas">
+              <header>
+                <span class="paper-marker">[1] Parnas, 1972</span>
+                <h3>ファイルを「処理の順番」で分けると、変更が境界を貫通する。</h3>
+                <p class="paper-thesis">一言でいうと、モジュールは実行ステップではなく、将来変わりうる設計判断の周りに作る。</p>
+              </header>
+
+              <div class="paper-body">
+                <div class="paper-subsection">
+                  <h4>論文が置いた問題</h4>
+                  <p>Parnas は、同じ KWIC（文中の語を循環シフトして索引を作る）システムを2通りに分解します。一方は「入力する → シフトする → 並べ替える → 出力する」という処理手順ごとの分割。もう一方は、データ表現、シフトの生成方法、並べ替え方など、外から隠したい設計判断ごとの分割です。</p>
+                  <p>正常系だけを見れば、前者のほうがフローを追いやすく見えます。差が出るのは変更時です。入力形式、保存形式、シフト生成のタイミング、並べ替えアルゴリズムを変えるとき、処理手順で切った構造では複数モジュールへ知識が漏れています。設計判断で切った構造なら、その判断を所有するモジュール内に変更を閉じ込められます。</p>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>「情報隠蔽」はアクセス修飾子の話ではない</h4>
+                  <p><code>private</code> を付けることは手段のひとつですが、中心は「ほかのモジュールが何を知らずに済むか」です。DBのテーブル構造を直接参照できなくても、十数個の用途別メソッドがスキーマの都合を露出していれば、設計判断は隠れていません。逆に公開APIが多少広くても、変化しやすい実装上の選択を安定した語彙へ変換できていれば、隠蔽は機能しています。</p>
+                  <div class="code-contrast" role="group" aria-label="処理で分けた構造と設計判断で分けた構造の比較">
+                    <div><span>処理で分ける</span><code>load → normalize → save</code><p>保存形式の知識が各段階へ漏れやすい</p></div>
+                    <div><span>判断で分ける</span><code>DocumentStore.save(doc)</code><p>保存形式を Store の後ろへ閉じ込める</p></div>
+                  </div>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>archscore が見ているもの</h4>
+                  <p><code>publicPaths</code> は、ある境界の外側が知ってよい入口を宣言します。private dependency 違反は、別モジュールが隠されるべき実装詳細を知ってしまった場所です。<code>mayDependOn</code> は、その知識が流れてよい方向を宣言します。ただし、境界の名前や切り方が良いかまでは静的依存だけで判定できません。そこは変更履歴と人間の設計判断が必要です。</p>
+                </div>
+
+                <aside>
+                  <strong>この論文からは言えないこと</strong>
+                  <p>「モジュールは小さいほど良い」「公開シンボルは10個以下が正しい」とは述べていません。情報隠蔽は分割基準であり、archscore のシンボル上限や配点は、その基準を運用可能にするローカルポリシーです。</p>
+                </aside>
+              </div>
+            </article>
+
+            <article class="paper-note" id="deep-structured">
+              <header>
+                <span class="paper-marker">[2] Stevens, Myers &amp; Constantine, 1974</span>
+                <h3>依存の本数だけでなく、何を共有しているかが変更コストを決める。</h3>
+                <p class="paper-thesis">一言でいうと、モジュール間の結びつきは弱く、モジュール内の要素はひとつの目的へ強く関係しているほうが扱いやすい。</p>
+              </header>
+
+              <div class="paper-body">
+                <div class="paper-subsection">
+                  <h4>coupling と cohesion は別の軸</h4>
+                  <p><strong>結合度（coupling）</strong>は、モジュール同士がどれほど互いの事情に依存するかです。呼び出しが1本でも、グローバルな状態や相手の内部表現を共有していれば強く結びつきます。反対に呼び出しが複数あっても、安定した値オブジェクトと小さな契約だけを介するなら、影響は限定できます。</p>
+                  <p><strong>凝集度（cohesion）</strong>は、ひとつのモジュールに入っている要素が、同じ責務を果たすためにどれほど関係しているかです。「ユーザー関連」という名前だけで認証、請求、通知を集めたモジュールは、語彙上はまとまっていても変更理由は別です。ひとつのユースケースを完遂するためにデータと処理が集まっていれば、変更理由も揃いやすくなります。</p>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>低結合・高凝集は、行数を減らす標語ではない</h4>
+                  <p>狙いは局所的に推論できる範囲を作ることです。ある変更を理解するために、別チームのモジュールの内部状態、呼び出し順、暗黙の初期化まで頭へ載せる必要があるなら結合は強い。ひとつのモジュールを変更するたび無関係なテスト群が壊れるなら、凝集は疑わしい。この2軸は、開発者が同時に覚える必要のある文脈の量として現れます。</p>
+                  <div class="engineering-signal">
+                    <span>コードレビューでの兆候</span>
+                    <p>「このフィールドは先に別APIで初期化済みのはず」「この enum を増やすと3サービスを同時デプロイする」が頻出するなら、import数には出ない強い結合がある。</p>
+                  </div>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>archscore が見ているもの</h4>
+                  <p><code>fanOut</code> は直接依存先の数、<code>couplingLoad</code> は依存先の不安定さを加味した負荷です。安定した共通基盤1つへの依存と、変更頻度の高い機能5つへの依存を同一視しません。凝集度は解決できた依存のうち境界内に留まる割合で近似します。ただし、Goの単一パッケージのように内部importが存在しない構造では証拠がないため、満点ではなく未評価になります。</p>
+                </div>
+
+                <aside>
+                  <strong>この論文からは言えないこと</strong>
+                  <p>依存ゼロを目指すべき、という話ではありません。役割を果たすには依存が必要です。また、構造上の内部エッジ比率は意味的な凝集そのものではなく、代理信号です。</p>
+                </aside>
+              </div>
+            </article>
+
+            <article class="paper-note" id="deep-reflexion">
+              <header>
+                <span class="paper-marker">[3] Murphy, Notkin &amp; Sullivan, 2001</span>
+                <h3>アーキテクチャ図を正解にせず、実装との差分を会話の材料にする。</h3>
+                <p class="paper-thesis">一言でいうと、設計者の高水準モデルとソースから抽出した依存を対応づけ、一致・不一致・欠落として要約する。</p>
+              </header>
+
+              <div class="paper-body">
+                <div class="paper-subsection">
+                  <h4>Reflexion Model の3つの入力</h4>
+                  <p>必要なのは、設計者が期待するモジュールと依存を表す<strong>高水準モデル</strong>、ソースから抽出した関係を持つ<strong>ソースモデル</strong>、そしてソースの要素がどの高水準モジュールに属するかを示す<strong>写像</strong>です。この写像を通して2つを比較すると、期待どおり存在する関係（convergence）、実装にだけある関係（divergence）、設計上はあるが実装に見つからない関係（absence）が得られます。</p>
+                  <p>大事なのは、不一致を即座に「コードの誤り」と決めないことです。設計モデルが古い、写像が粗い、生成コードを含めた、あるいは実装が意図せず逸脱した。差分は、どちらを直すべきか調査する入口です。</p>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>完全なモデルより、目的に十分なモデル</h4>
+                  <p>この手法は、すべてのクラスと呼び出しを精密に図示することを目指しません。今の作業で検証したい仮説に合わせて高水準モデルと写像を作り、差分を見て反復します。巨大なExcelコードベースにも適用された背景には、詳細を捨てて関係を要約するからこそ、人が推論できるという考えがあります。</p>
+                  <div class="model-equation" role="group" aria-label="Reflexion Modelの比較方法">
+                    <span>期待する依存</span><b>＋</b><span>ソースの依存</span><b>＋</b><span>所属の写像</span><b>＝</b><strong>意味のある差分</strong>
+                  </div>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>archscore が見ているもの</h4>
+                  <p><code>archscore.json</code> が高水準モデル、import解析がソースモデル、<code>paths</code> が写像に相当します。許可していない依存は divergence として具体的なファイル・行まで降ろします。<code>analysisCoverage</code> は写像できなかったソースの割合を表し、未割り当てコードが多いほど、ほかの構造指標の信頼度も下げます。</p>
+                  <p>ただし archscore は、許可した依存が実際には存在しないことを違反にしません。<code>mayDependOn</code> は「必須」ではなく「許可」だからです。この点は原典の absence と意図的に異なります。</p>
+                </div>
+
+                <aside>
+                  <strong>この論文からは言えないこと</strong>
+                  <p>宣言モデルが自動的に正しいとは限りません。ポリシーに実装を無理やり合わせれば、古い設計を固定化します。観測モードと差分レビューが必要なのはそのためです。</p>
+                </aside>
+              </div>
+            </article>
+
+            <article class="paper-note" id="deep-sarkar">
+              <header>
+                <span class="paper-marker">[4] Sarkar, Kak &amp; Rama, 2008</span>
+                <h3>クラスがきれいでも、パッケージの切り方が良いとは限らない。</h3>
+                <p class="paper-thesis">一言でいうと、大規模システムではクラスより上のモジュール粒度と、その公開API・モジュール間依存を独立して評価する必要がある。</p>
+              </header>
+
+              <div class="paper-body">
+                <div class="paper-subsection">
+                  <h4>クラスとモジュールを同一視しない</h4>
+                  <p>従来のオブジェクト指向メトリクスは、クラスをモジュールのように扱うことが多くありました。しかし数百万行のシステムでは、開発者が日常的に扱う境界はパッケージ、サブシステム、コンポーネントです。個々のクラスがカプセル化されていても、パッケージをまたぐ継承、関連、メソッド呼び出し、状態へのアクセスが網の目になれば、保守と拡張は難しくなります。</p>
+                  <p>この論文は、モジュールの公開APIとモジュール間依存の両面を見るメトリクス群を提示します。つまり「内部がきれいか」だけでなく、「外部へどれだけの面積を見せ、どんな関係を作ったか」を評価対象に引き上げました。</p>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>公開面積は、将来守り続ける約束の量</h4>
+                  <p>公開された型や関数は、単なるコード量ではありません。利用側が依存できる選択肢であり、変更時に互換性を考慮する範囲です。APIが大きいほど必ず悪いわけではありませんが、内部の都合が公開面へ流出していないか、複数の入口が同じ責務を重複して表現していないかを問う必要があります。</p>
+                  <div class="engineering-signal">
+                    <span>設計レビューでの問い</span>
+                    <p>この公開型は利用者の問題領域を表しているか。それとも、内部フレームワーク・永続化形式・実装順序を利用者へ覚えさせているか。</p>
+                  </div>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>archscore が見ているもの</h4>
+                  <p><code>publicPaths</code> と <code>maxPublicSymbols</code> は公開面を明示し、その大きさを追います。契約を実際に利用する inbound 関係で重みづけするため、誰からも参照されないleaf moduleが、重要な契約の評価を薄めません。fan-in / fan-out、private dependency、cohesion と組み合わせ、単一の数字へ早急に潰さない点もこの問題設定に沿っています。</p>
+                </div>
+
+                <aside>
+                  <strong>この論文からは言えないこと</strong>
+                  <p>APIシンボル数だけでモジュール化品質を決められるわけではありません。archscore も型レベルの全表面、意味の重複、実行時結合までは測れません。数値はレビュー対象を絞るための入口です。</p>
+                </aside>
+              </div>
+            </article>
+
+            <article class="paper-note" id="deep-gall">
+              <header>
+                <span class="paper-marker">[5] Gall, Hajek &amp; Jazayeri, 1998</span>
+                <h3>import がなくても、一緒に変わり続けるなら依存しているかもしれない。</h3>
+                <p class="paper-thesis">一言でいうと、リリース履歴の共変更パターンから、ソース構造だけでは見えない論理的結合を発見する。</p>
+              </header>
+
+              <div class="paper-body">
+                <div class="paper-subsection">
+                  <h4>静的依存が見落とすもの</h4>
+                  <p>APIとクライアント、DB migrationとモデル、設定スキーマとパーサー、サーバーとSDK。これらは同じ言語の import graph に現れないことがあります。それでも同じ要求のたびに一緒に変更されるなら、開発上は結びついています。論文は大規模な通信交換システムの20リリースを調べ、プログラム、モジュール、サブシステムのバージョン番号と変更報告を使って共通の変更パターンを探しました。</p>
+                  <p>これを<strong>論理的結合</strong>と呼ぶのは、構文上の参照ではなく、変更理由を共有している可能性があるからです。意図した協調変更かもしれないし、責務が誤った境界に分かれている兆候かもしれません。</p>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>共変更は因果関係ではない</h4>
+                  <p>大規模リネーム、ライセンス更新、フォーマッタ導入、release branchの運用でも大量のファイルが一緒に変わります。履歴が短い、コミットが巨大、squash方針が不統一なら信号は歪みます。したがって、共変更は「この境界は間違い」という判定ではなく、「静的構造では説明できない関係を調べる」ための候補生成です。</p>
+                  <div class="code-contrast" role="group" aria-label="静的依存と変更依存の比較">
+                    <div><span>静的グラフ</span><code>service ──import──▶ schema</code><p>コードで明示された関係</p></div>
+                    <div><span>変更グラフ</span><code>service ══commit══ sdk</code><p>履歴から推定する関係</p></div>
+                  </div>
+                </div>
+
+                <div class="paper-subsection">
+                  <h4>archscore が見ているもの</h4>
+                  <p>境界発見では、静的依存 50%、Git co-change の Jaccard 類似度 40%、パス語彙 10%を組み合わせます。最低3回の共変更を要求し、偶然の一致を弱めます。変更局所性では、あるモジュールに関係するコミットのうち、解析対象変更の80%以上がそのモジュール内に収まる割合を測ります。履歴不足は失点ではなく、低い信頼度として扱います。</p>
+                </div>
+
+                <aside>
+                  <strong>この論文からは言えないこと</strong>
+                  <p>一緒に変わるコードを必ず同じモジュールへ移すべき、とは言えません。プロトコルの両端のように、分離したまま協調変更するのが正しい場合もあります。履歴は境界を決める証拠のひとつです。</p>
+                </aside>
+              </div>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section class="workflow" aria-labelledby="workflow-title">
