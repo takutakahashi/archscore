@@ -17,6 +17,7 @@
         <a href="#metrics">7つの指標</a>
         <a href="#evidence">信頼度</a>
         <a href="#sources">出典</a>
+        <a href="#recent-research">最近の研究</a>
         <a class="nav-cta" href="https://github.com/takutakahashi/archscore">GitHub</a>
       </nav>
     </header>
@@ -386,6 +387,102 @@
             </article>
           </div>
         </div>
+      </section>
+
+      <section class="recent-research" id="recent-research" aria-labelledby="recent-title">
+        <div class="recent-intro">
+          <p class="section-index">Research update / 2019–2024</p>
+          <h2 id="recent-title">古典は残った。<br />測り方は更新された。</h2>
+          <p>近年の大規模実証研究は、境界・循環・結合を見る価値を補強する一方、静的依存だけでは見えない関係や、すべてのスメルを同じ重さで扱う危険も示しています。</p>
+        </div>
+
+        <div class="research-ledger" role="table" aria-label="古典的な主張と最近の研究、archscoreへの反映">
+          <div class="ledger-head" role="row">
+            <span role="columnheader">古典からの問い</span>
+            <span role="columnheader">近年わかったこと</span>
+            <span role="columnheader">archscoreへの反映</span>
+          </div>
+
+          <article class="ledger-row" role="row">
+            <div role="cell">
+              <span class="research-year">2024 / 14 systems, 485 releases</span>
+              <h3>循環は、あるかないかだけで十分か。</h3>
+            </div>
+            <div role="cell">
+              <p>Gnoyke らはアーキテクチャスメルの経時変化を調べ、特にクラスレベルの循環依存が、スメル同士の結合によって複雑な multi-hub へ成長しやすいと報告しました。一方、unstable dependency は緩やかに成長し、hub-like dependency は比較的安定していました。</p>
+              <a href="https://doi.org/10.1016/j.jss.2024.112170" rel="noopener noreferrer">Evolution Patterns of Software-Architecture Smells <span aria-hidden="true">↗</span></a>
+            </div>
+            <div role="cell">
+              <p><strong>循環の個数より、巻き込まれる範囲を見る。</strong> archscore が循環コンポーネント内のモジュール比率で減点し、分割候補ごとに残る最大循環を示す理由と整合します。今後は baseline 間で循環の成長・合流を直接追う余地があります。</p>
+              <span class="impact-tag">非循環性 / baseline比較</span>
+            </div>
+          </article>
+
+          <article class="ledger-row" role="row">
+            <div role="cell">
+              <span class="research-year">2022 / 499 Python projects</span>
+              <h3>ソースに見える依存だけが、依存か。</h3>
+            </div>
+            <div role="cell">
+              <p>Jin らは、動的型付けによって構文解析だけでは確定できない possible dependency を型推論と型ヒントから復元しました。保守性、共変更、アンチパターン検出への影響は大きく、明示的な依存より強い影響を示すケースもありました。</p>
+              <a href="https://doi.org/10.1109/TSE.2022.3171288" rel="noopener noreferrer">Evaluating the Impact of Possible Dependencies on Architecture-Level Maintainability <span aria-hidden="true">↗</span></a>
+            </div>
+            <div role="cell">
+              <p><strong>静的グラフの完全性を前提にしない。</strong> archscore の confidence と analysis coverage は、観測できた構造と実際の構造を区別するために重要です。現状の TypeScript 解析は path alias、DI、イベント、実行時ロードを完全には捉えません。</p>
+              <span class="impact-tag">信頼度 / 結合度 / 解析限界</span>
+            </div>
+          </article>
+
+          <article class="ledger-row" role="row">
+            <div role="cell">
+              <span class="research-year">2022 / 21,274 review comments</span>
+              <h3>構造劣化は、ツールだけで見つかるか。</h3>
+            </div>
+            <div role="cell">
+              <p>Li らが OpenStack の Nova と Neutron を調べたところ、アーキテクチャ劣化に関するコメントは全体では少数ながら明確に存在し、頻出した兆候はアーキテクチャ違反、機能重複、循環依存でした。指摘したレビューの多くは症状の除去に寄与しましたが、無視された例もありました。</p>
+              <a href="https://doi.org/10.1109/ICSA53651.2022.00011" rel="noopener noreferrer">Symptoms of Architecture Erosion in Code Reviews <span aria-hidden="true">↗</span></a>
+            </div>
+            <div role="cell">
+              <p><strong>CIゲートは会話の代替ではなく、早期警報にする。</strong> 違反箇所をファイルと行まで返すのは、判定を絶対視するためではなく、レビューで「意図か劣化か」を議論できる粒度へ下ろすためです。</p>
+              <span class="impact-tag">境界 / 非循環性 / レビュー</span>
+            </div>
+          </article>
+
+          <article class="ledger-row" role="row">
+            <div role="cell">
+              <span class="research-year">2021 / 1,111 repositories</span>
+              <h3>問題は少数の場所へ集中するか。</h3>
+            </div>
+            <div role="cell">
+              <p>Chaniotaki と Sharma は、750のJava、361のC#リポジトリ、5,000万行超を対象に7種類のスメルを分析しました。Pareto型の集中を示したのはJavaで約45%、C#で66%。少数の重要コンポーネントへ集中する戦略は有効ですが、80/20を普遍則にはできません。</p>
+              <a href="https://doi.org/10.1109/MSR52588.2021.00031" rel="noopener noreferrer">Architecture Smells and Pareto Principle <span aria-hidden="true">↗</span></a>
+            </div>
+            <div role="cell">
+              <p><strong>全違反を同じ優先度で直さない。</strong> 違反の広がり、循環に巻き込む範囲、fan-in、変更頻度を合わせて優先順位を付けるべきです。一方、archscore のゲートは「少数だから許す」ためのものではありません。</p>
+              <span class="impact-tag">診断 / 優先順位 / fan-in</span>
+            </div>
+          </article>
+
+          <article class="ledger-row" role="row">
+            <div role="cell">
+              <span class="research-year">2019 / 約1,000 servicesの事例</span>
+              <h3>境界を増やせば、疎結合になるか。</h3>
+            </div>
+            <div role="cell">
+              <p>de Toledo らの大企業事例では、マイクロサービスの通信層に業務ロジックが入り込むことと、大量の point-to-point 接続がアーキテクチャ負債として確認されました。サービス数や物理分離は、責務の分離と同義ではありません。</p>
+              <a href="https://doi.org/10.1109/TechDebt.2019.00026" rel="noopener noreferrer">Architectural Technical Debt in Microservices <span aria-hidden="true">↗</span></a>
+            </div>
+            <div role="cell">
+              <p><strong>役割を考慮して依存を読む。</strong> composition root を fan-out 罰則から外す一方、そこへの inbound dependency は警告する設計につながります。ただし、別リポジトリ間の通信トポロジーは現在の archscore の観測外です。</p>
+              <span class="impact-tag">結合度 / 役割 / 観測範囲</span>
+            </div>
+          </article>
+        </div>
+
+        <aside class="recent-conclusion">
+          <strong>最近の研究から変わる読み方</strong>
+          <p>スコアを「構造の真実」ではなく、明示的に観測できた依存から作る早期警報として読む。単発値より時間変化を重視し、静的解析、変更履歴、コードレビューという異なる証拠を重ねる。</p>
+        </aside>
       </section>
 
       <section class="workflow" aria-labelledby="workflow-title">
