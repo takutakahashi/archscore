@@ -16,6 +16,7 @@
       <nav aria-label="メインナビゲーション">
         <a href="#metrics">7つの指標</a>
         <a href="#evidence">信頼度</a>
+        <a href="#sources">出典</a>
         <a class="nav-cta" href="https://github.com/takutakahashi/archscore">GitHub</a>
       </nav>
     </header>
@@ -88,6 +89,7 @@
               <div><dt>見るもの</dt><dd id="detail-input">依存モジュールの組み合わせ</dd></div>
               <div><dt>良い状態</dt><dd id="detail-good">宣言した依存方向だけが存在する</dd></div>
             </dl>
+            <a class="detail-source" id="detail-source" href="#source-reflexion">根拠となる原典 <span aria-hidden="true">↓</span></a>
           </article>
         </div>
       </section>
@@ -121,6 +123,69 @@
           <article><span>決定性</span><h3>同じ入力には、同じ判定を返す</h3><p>機械的な解析と字句順のタイブレークで、CIでもローカルでも結果を再現できます。</p></article>
           <article><span>文脈</span><h3>数字を設計判断より強くしない</h3><p>凝集度や変更局所性はヒントです。最終的な意図は、宣言された依存ポリシーにあります。</p></article>
         </div>
+      </section>
+
+      <section class="sources" id="sources" aria-labelledby="sources-title">
+        <div class="sources-heading">
+          <p class="section-index">Lineage, not borrowed authority</p>
+          <h2 id="sources-title">この良さは、<br />どこから来たか。</h2>
+          <p>指標が見ている性質には、ソフトウェア設計研究の系譜があります。一方、配点とゲート条件は archscore が採用した運用上の判断です。</p>
+        </div>
+
+        <ol class="source-list">
+          <li id="source-parnas">
+            <span class="source-number">[1]</span>
+            <div>
+              <h3>境界は、処理手順ではなく「隠すべき設計判断」で分ける</h3>
+              <p>情報隠蔽によるモジュール分割の原典。archscore の境界と公開契約は、変更されやすい判断を小さな公開面の後ろへ閉じ込める考え方につながります。</p>
+              <a href="https://doi.org/10.1145/361598.361623" rel="noopener noreferrer">D. L. Parnas, “On the Criteria To Be Used in Decomposing Systems into Modules,” 1972 <span aria-hidden="true">↗</span></a>
+            </div>
+            <span class="source-tags">境界 / 公開契約</span>
+          </li>
+          <li id="source-structured-design">
+            <span class="source-number">[2]</span>
+            <div>
+              <h3>モジュール内は強く、モジュール間は弱く結びつける</h3>
+              <p>結合度と凝集度を設計品質として扱った初期の体系。archscore は依存グラフ上の観測可能な代理指標として、fan-out、依存先の不安定さ、内部依存率を使います。</p>
+              <a href="https://doi.org/10.1147/sj.132.0115" rel="noopener noreferrer">W. P. Stevens, G. J. Myers, L. L. Constantine, “Structured Design,” 1974 <span aria-hidden="true">↗</span></a>
+            </div>
+            <span class="source-tags">結合度 / 凝集度</span>
+          </li>
+          <li id="source-reflexion">
+            <span class="source-number">[3]</span>
+            <div>
+              <h3>意図した設計と、実装された依存を照合する</h3>
+              <p>高水準モデルとソースから抽出したモデルの差分を可視化する研究。宣言した依存ポリシーと実コードを比較し、逸脱を具体的に示す archscore の中心思想に対応します。</p>
+              <a href="https://doi.org/10.1109/32.917525" rel="noopener noreferrer">G. C. Murphy, D. Notkin, K. J. Sullivan, “Software Reflexion Models,” 2001 <span aria-hidden="true">↗</span></a>
+            </div>
+            <span class="source-tags">境界 / 適合性</span>
+          </li>
+          <li id="source-modularity">
+            <span class="source-number">[4]</span>
+            <div>
+              <h3>モジュール化品質は、複数の構造的性質で測る</h3>
+              <p>大規模オブジェクト指向ソフトウェアのモジュール化を、凝集性・結合・粒度などから評価。単一の万能値ではなく複数の観測点を併用する根拠になります。</p>
+              <a href="https://doi.org/10.1109/TSE.2008.43" rel="noopener noreferrer">S. Sarkar et al., “Metrics for Measuring the Quality of Modularization of Large-Scale Object-Oriented Software,” 2008 <span aria-hidden="true">↗</span></a>
+            </div>
+            <span class="source-tags">結合度 / 凝集度</span>
+          </li>
+          <li id="source-change-coupling">
+            <span class="source-number">[5]</span>
+            <div>
+              <h3>一緒に変更され続けるものは、論理的に結びついている</h3>
+              <p>リリース履歴から、静的依存だけでは見えない論理的結合を検出する研究。archscore の変更局所性と co-change affinity の背景です。</p>
+              <a href="https://doi.org/10.1109/ICSM.1998.738508" rel="noopener noreferrer">H. Gall, K. Hajek, M. Jazayeri, “Detection of Logical Coupling Based on Product Release History,” 1998 <span aria-hidden="true">↗</span></a>
+            </div>
+            <span class="source-tags">変更局所性 / 境界発見</span>
+          </li>
+        </ol>
+
+        <aside class="source-caveat" aria-label="出典の適用範囲">
+          <strong>原典が支えること</strong>
+          <p>境界、情報隠蔽、低結合・高凝集、設計適合性、変更履歴を観測する価値。</p>
+          <strong>archscore が決めたこと</strong>
+          <p>100点の配分、各しきい値、証拠で正規化する計算法、違反と循環を数値スコアから独立してゲートする方針。</p>
+        </aside>
       </section>
 
       <section class="workflow" aria-labelledby="workflow-title">

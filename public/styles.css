@@ -80,6 +80,7 @@ h2 { margin: 0; font-size: clamp(2.2rem, 4.4vw, 4.5rem); line-height: 1.15; lett
 .metric-detail dl div { border-top: 1px solid #dfe3e8; padding: .75rem 0; }
 .metric-detail dt { color: var(--muted); font-size: .72rem; }
 .metric-detail dd { margin: .15rem 0 0; font-weight: 700; font-size: .9rem; }
+.detail-source { display: inline-block; margin-top: 1.35rem; color: var(--blue); font-size: .78rem; font-weight: 800; text-underline-offset: .25rem; }
 .evidence { background: #e7edf7; padding: 8rem max(2rem, calc((100vw - var(--max)) / 2)); display: grid; grid-template-columns: 1fr 1.15fr; gap: 5rem; }
 .evidence-heading { grid-row: span 2; }
 .confidence-demo { border: 1px solid #aeb9ca; background: var(--paper); padding: 2rem; }
@@ -102,6 +103,19 @@ h2 { margin: 0; font-size: clamp(2.2rem, 4.4vw, 4.5rem); line-height: 1.15; lett
 .principle-list span { color: var(--blue); font-weight: 800; }
 .principle-list h3 { margin: 0; font-size: 1.35rem; letter-spacing: -.03em; }
 .principle-list p { margin: 0; color: var(--muted); }
+.sources { padding: 9rem max(2rem, calc((100vw - var(--max)) / 2)); background: var(--white); }
+.sources-heading { display: grid; grid-template-columns: .45fr .9fr .65fr; gap: 3rem; align-items: start; margin-bottom: 5rem; }
+.sources-heading > p:last-child { margin: .6rem 0 0; color: var(--muted); }
+.source-list { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--ink); }
+.source-list li { display: grid; grid-template-columns: 4rem 1fr 10rem; gap: 2rem; padding: 2rem 0; border-bottom: 1px solid var(--line); scroll-margin-top: 2rem; }
+.source-number { color: var(--blue); font: 700 .75rem ui-monospace, monospace; }
+.source-list h3 { margin: 0 0 .65rem; font-size: 1.25rem; letter-spacing: -.03em; }
+.source-list p { max-width: 46rem; margin: 0 0 .8rem; color: var(--muted); font-size: .9rem; }
+.source-list a { color: var(--blue); font-size: .78rem; line-height: 1.5; text-underline-offset: .25rem; }
+.source-tags { align-self: start; text-align: right; color: var(--muted); font: .68rem/1.6 ui-monospace, monospace; }
+.source-caveat { margin: 3rem 0 0 4rem; padding: 1.5rem 2rem; border-left: 5px solid var(--orange); display: grid; grid-template-columns: 10rem 1fr; gap: .8rem 2rem; background: var(--paper); }
+.source-caveat strong { font-size: .82rem; }
+.source-caveat p { margin: 0; color: var(--muted); font-size: .86rem; }
 .workflow { color: white; background: var(--blue); padding: 8rem max(2rem, calc((100vw - var(--max)) / 2)); display: grid; grid-template-columns: .9fr 1.1fr; gap: 6rem; }
 .workflow .section-index { color: #d8e7ff; }
 .workflow ol { list-style: none; padding: 0; margin: 0; border-top: 1px solid rgba(255,255,255,.5); }
@@ -120,18 +134,22 @@ footer p { margin: 0; }
   .hero { grid-template-columns: 1fr; padding-top: 4rem; }
   .blueprint { max-width: 650px; }
   .section-intro { grid-template-columns: 1fr; gap: 1rem; }
+  .sources-heading { grid-template-columns: 1fr; gap: 1rem; }
   .score-instrument { grid-template-columns: 190px 1fr; gap: 3rem; }
   .metric-detail { grid-column: 1 / -1; }
   .evidence, .workflow { grid-template-columns: 1fr; gap: 3rem; }
   .evidence-heading { grid-row: auto; }
   .principle-list article { grid-template-columns: 6rem 1fr; gap: 1.5rem; }
   .principle-list p { grid-column: 2; }
+  .source-list li { grid-template-columns: 3rem 1fr; }
+  .source-tags { grid-column: 2; text-align: left; }
 }
 
 @media (max-width: 620px) {
   .site-header { padding: 0 1.2rem; }
   nav a:not(.nav-cta) { display: none; }
   .hero, .metrics-section, .principles { padding-left: 1.2rem; padding-right: 1.2rem; }
+  .sources { padding-left: 1.2rem; padding-right: 1.2rem; }
   .hero { padding-top: 3.5rem; gap: 2rem; }
   h1 { font-size: clamp(3.1rem, 16vw, 4.8rem); }
   .hero code { font-size: .63rem; }
@@ -144,6 +162,9 @@ footer p { margin: 0; }
   .principle-list article { display: block; }
   .principle-list h3 { margin: .5rem 0; }
   .principle-list p { margin-top: .7rem; }
+  .source-list li { grid-template-columns: 2rem 1fr; gap: 1rem; }
+  .source-caveat { margin-left: 0; padding: 1.3rem; grid-template-columns: 1fr; gap: .3rem; }
+  .source-caveat p + strong { margin-top: .8rem; }
   footer { display: block; }
   footer p { margin-top: .5rem; }
 }
