@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Clean Architectureを、目的、依存ルール、4つの領域、実装、archscoreとの関係の順に解説します。">
+  <meta name="theme-color" content="#14213d"><title>Clean Architectureは、何をきれいにするのか — archscore notes</title>
+  <link rel="stylesheet" href="/editorial.css">
+</head>
+<body class="article-page">
+  <a class="skip-link" href="#article-body">本文へ移動</a>
+  <header class="note-header"><a class="note-brand" href="/">arch<span>score</span> notes</a><nav aria-label="サイトナビゲーション"><a href="/">記事一覧</a><a href="/guide/">指標ガイド</a><a href="https://github.com/takutakahashi/archscore">GitHub</a></nav></header>
+  <main>
+    <header class="article-hero">
+      <div class="article-meta"><span>Concept guide</span><span>2026-11-20</span><span>12 min read</span></div>
+      <h1>Clean Architectureは、<br>何をきれいにするのか。</h1>
+      <p class="article-deck">円を覚えるための記事ではありません。まず目的をつかみ、依存の向き、境界、実装へと少しずつ解像度を上げます。</p>
+      <div class="article-summary"><strong>先に結論</strong><p>Clean Architectureが守ろうとするのは、ビジネス上の判断です。UI、DB、フレームワークの都合が、その判断へ流れ込まないように依存を整えます。</p></div>
+    </header>
+    <div class="article-layout" id="article-body">
+      <aside class="article-toc"><p>この記事の流れ</p><ol><li><a href="#why">なぜ必要か</a></li><li><a href="#rule">ひとつのルール</a></li><li><a href="#areas">4つの領域</a></li><li><a href="#implementation">実装の道具</a></li><li><a href="#measurement">どう測るか</a></li></ol></aside>
+      <article class="prose">
+        <section id="why">
+          <span class="section-step">1 / 5 — まず目的</span><h2>変わりやすいものから、変えたくないものを守る。</h2>
+          <p>注文を確定できる条件、料金の計算方法、ユーザーへ与える権限。こうしたルールは、プロダクトが価値を提供するための中心です。一方で、HTTPフレームワーク、データベース、メッセージブローカーは、そのルールを届けるための手段です。</p>
+          <p>問題は、手段の都合が中心へ入り込むことです。注文判定の関数がHTTPのRequestを受け取り、ORMのModelを直接更新し、特定クラウドのSDKで通知するなら、業務ルールを理解するために3つの技術を同時に理解しなければなりません。</p>
+          <div class="zoom-diagram" role="img" aria-label="ビジネスルールを技術詳細から守る構造"><div class="detail-orbit"><span>HTTP</span><span>PostgreSQL</span><span>Kafka</span></div><div class="policy-core"><small>守るもの</small><strong>Business<br>policy</strong></div></div>
+          <h3>「きれい」とは、見た目ではなく変更の伝わり方</h3><p>ディレクトリが左右対称でも、ファイル名が揃っていても、技術変更が業務ルールまで波及するなら目的を果たしていません。Clean Architectureでいうcleanは、変更理由の異なるものを分け、外側の変更を内側へ伝えない状態だと捉えると理解しやすくなります。</p>
+        </section>
+        <section id="rule">
+          <span class="section-step">2 / 5 — 全体を貫くルール</span><h2>ソースコードの依存は、内側だけを向く。</h2>
+          <p>Clean Architectureの中心はDependency Ruleです。内側にはプロダクト固有のポリシー、外側には技術的な詳細を置きます。外側は内側を知ってよいが、内側は外側を知りません。</p>
+          <div class="dependency-comparison"><div><span class="comparison-label is-bad">技術へ依存する</span><code>OrderService → PostgresOrderStore</code><p>DBを変えると、注文処理も変更対象になる。</p></div><div><span class="comparison-label is-good">契約を内側に置く</span><code>PostgresStore → OrderRepository ← PlaceOrder</code><p>Use Caseが必要な契約を定義し、DB側が実装する。</p></div></div>
+          <h3>実行時の呼び出しと、ソース依存は別</h3><p>実行時にはUse CaseがRepositoryを呼びます。それでもソース上では、Use Caseが定義したinterfaceを外側のRepository実装が満たします。呼び出しの流れではなく、コンパイル時に誰が誰の名前を知るかを逆転させています。</p>
+          <blockquote><p>中心のルールは、外側の製品名やフレームワーク型を知らなくてよい。</p></blockquote>
+        </section>
+        <section id="areas">
+          <span class="section-step">3 / 5 — 地図を読む</span><h2>4つの領域は、役割を考えるための地図。</h2>
+          <p>よく見る同心円は、必須のディレクトリ構成ではありません。内側へ行くほどプロダクト固有で、外側へ行くほど交換可能な詳細になる、という距離感を示します。</p>
+          <div class="area-list"><div><span>中心</span><h3>Entities</h3><p>複数のユースケースから使われる、長期的なビジネスルール。注文、契約、在庫などの概念と不変条件。</p></div><div><span>内側</span><h3>Use Cases</h3><p>ユーザーの目的を完遂する手順。「注文を確定する」「権限を付与する」といったアプリケーション固有の判断。</p></div><div><span>境界</span><h3>Interface Adapters</h3><p>外部のデータ形式と、Use Caseが扱う形式を変換する。Controller、Presenter、Repository実装など。</p></div><div><span>外側</span><h3>Frameworks &amp; Drivers</h3><p>Web、DB、UI、デバイス、クラウドSDK。価値を届けるために必要だが、交換可能にしたい詳細。</p></div></div>
+          <h3>4層に分ければ正しい、ではない</h3><p>小さなCRUDサービスなら、EntityとUse Caseを分けても同じ理由で同時に変わるだけかもしれません。層の数は目的ではなく、異なる変更理由を表現した結果です。</p>
+        </section>
+        <section id="implementation">
+          <span class="section-step">4 / 5 — 実装へ降りる</span><h2>境界を作る道具は、3つあればよい。</h2>
+          <div class="tool-sections"><div><span>01</span><h3>Port</h3><p>内側が外部へ期待する契約。外部技術の語彙を内側へ漏らさない。</p><code>type OrderRepository interface { Save(Order) error }</code></div><div><span>02</span><h3>Adapter</h3><p>HTTP、DB、CLIなどの形式をPortへ合わせ、技術変更を受け止める。</p><code>type PostgresOrders struct { db *sql.DB }</code></div><div><span>03</span><h3>Composition root</h3><p>具体的な実装を選び組み立てる場所。再利用される業務コードは混ぜない。</p><code>usecase := NewPlaceOrder(PostgresOrders{db})</code></div></div>
+          <h3>interfaceは、境界がある場所にだけ置く</h3><p>すべてのstructへ1対1のinterfaceを作っても、変更理由は分離されません。内側のポリシーから外側の詳細を隠す必要があるときにPortを置きます。</p>
+        </section>
+        <section id="measurement">
+          <span class="section-step">5 / 5 — 観測する</span><h2>守れているかは、依存グラフで確かめられる。</h2>
+          <p>どのモジュールがどこへ依存してよいかを宣言すれば、Dependency Ruleの一部は機械的に検証できます。</p>
+          <table><thead><tr><th>守りたいこと</th><th>archscoreで見るもの</th></tr></thead><tbody><tr><td>依存は内側へ向く</td><td><code>mayDependOn</code></td></tr><tr><td>実装詳細を隠す</td><td><code>publicPaths</code></td></tr><tr><td>公開契約を増やしすぎない</td><td><code>maxPublicSymbols</code></td></tr><tr><td>組み立てを端へ置く</td><td><code>composition-root</code></td></tr><tr><td>相互依存を作らない</td><td>acyclicity</td></tr><tr><td>変更を境界内へ閉じる</td><td>change locality</td></tr></tbody></table>
+          <div class="limits-note"><strong>ツールが判断できないこと</strong><p>Domainという名前のパッケージに、本当に業務ルールがあるか。境界が実際の変更理由に沿っているか。archscoreは宣言と実装の一致を見ますが、宣言そのものの意味は人が判断します。</p></div>
+        </section>
+        <section class="article-conclusion"><span class="section-step">まとめ</span><h2>円ではなく、変更の矢印を見る。</h2><p>まず「ビジネス上の判断を技術詳細から守る」という目的を置く。次にソース依存を内側へ向け、必要な場所にだけPortとAdapterを作り、最後に依存グラフで確かめます。</p><p>この順なら、4層の名前を忘れても設計判断は残ります。</p></section>
+      </article>
+    </div>
+    <nav class="article-pagination" aria-label="記事の前後移動"><a href="/"><span>記事一覧</span><strong>← 連載の目次へ戻る</strong></a><a href="/guide/#metrics"><span>次の記事</span><strong>良さをどう観測するか →</strong></a></nav>
+  </main>
+  <footer class="note-footer"><a class="note-brand" href="/">arch<span>score</span> notes</a><p>Deterministic architecture fitness functions.</p></footer>
+</body>
+</html>
