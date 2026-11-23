@@ -1,3 +1,5 @@
 /archscore
 /dist/
 *.out
+node_modules/
+.wrangler/
